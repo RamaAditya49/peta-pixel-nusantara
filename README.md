@@ -8,7 +8,7 @@ web, mobile, game engine, atau tool internal.
 ![Peta Pixel Nusantara preview](assets/preview.png)
 
 ![MIT License](https://img.shields.io/badge/code-MIT-00E5FF?style=flat-square)
-![Boundary Data](https://img.shields.io/badge/data-CC--BY--4.0%20%2F%20GADM-FFE500?style=flat-square)
+![Boundary Data](https://img.shields.io/badge/data-geoBoundaries%20CC--BY--4.0-FFE500?style=flat-square)
 ![No Build](https://img.shields.io/badge/demo-no%20build-0E607A?style=flat-square)
 ![Vanilla JS](https://img.shields.io/badge/stack-vanilla%20JS-131C33?style=flat-square)
 
@@ -56,7 +56,7 @@ Tidak ada build step, framework, bundler, atau backend. Demo ada di
 | Layer | Coverage | Runtime format |
 | --- | --- | --- |
 | Province | 38 provinsi Indonesia | `prov[]` + `provRle` |
-| Regency / city | 388 kabupaten/kota dari GADM adm2 | `kab[]` + `kabRle` |
+| Regency / city | 519 ADM2 units from geoBoundaries | `kab[]` + `kabRle` |
 | Relationship | kabupaten/kota ke provinsi induk | `kab[].p` + `provKab` |
 | Geometry metadata | bbox, centroid, luas sel | included per region |
 
@@ -77,7 +77,7 @@ Gunakan versi browser:
 <script>
   const mapData = window.PETA_HD;
   console.log(mapData.prov.length); // 38
-  console.log(mapData.kab.length);  // 388
+  console.log(mapData.kab.length);  // 519
 </script>
 ```
 
@@ -245,6 +245,7 @@ peta-pixel-nusantara/
 │  └─ peta-hd-data.json
 ├─ sources/
 │  ├─ indonesia-38-provinces.topo.json
+│  ├─ geoBoundaries-IDN-ADM2_simplified.geojson
 │  └─ indonesia-topojson-city-regency.json
 ├─ tools/
 │  └─ rasterize.mjs
@@ -261,36 +262,38 @@ Please keep attribution when using or redistributing derived data from this repo
   [denyherianto/indonesia-geojson-topojson-maps-with-38-provinces][prov-src],
   covering 38 provinces under CC-BY-4.0.
 - Regency / city boundaries:
+  [geoBoundaries][geoboundaries], covering 519 Indonesia ADM2 units under
+  CC-BY-4.0.
+- Legacy fallback ADM2 source:
   [tvalentius/Indonesia-topojson][kab-src], covering 388 GADM-derived
-  regencies/cities.
-- Upstream administrative boundaries:
-  [GADM](https://gadm.org) and related public boundary datasets. Upstream terms
-  apply.
+  regencies/cities. The rasterizer only uses this when the geoBoundaries file is
+  not present.
 
 Suggested attribution:
 
-> Peta Pixel Nusantara uses administrative boundary data from GADM,
-> denyherianto's Indonesia 38-province TopoJSON dataset, and tvalentius'
-> Indonesia TopoJSON dataset. Pixel rasterization and demo code by Rama Aditya.
+> Peta Pixel Nusantara uses province boundary data from denyherianto's
+> Indonesia 38-province TopoJSON dataset and ADM2 boundary data from
+> geoBoundaries. Pixel rasterization and demo code by Rama Aditya.
 
 See [ATTRIBUTION.md](ATTRIBUTION.md) for details.
 
 ## Current Limitations
 
-The bundled kabupaten/kota layer is based on older GADM adm2 data and currently
-contains 388 units. Indonesia has more official second-level administrative
-units today, so newer pemekaran areas may not appear as separate regions yet.
+The bundled kabupaten/kota layer now uses geoBoundaries ADM2 and contains
+519 units. That is more complete than the older GADM-derived fallback, but names
+and official codes may still need normalization before use in government-grade
+systems.
 
 The rendering format does not need to change to upgrade the data. Replace the
-adm2 source with a newer dataset, normalize the names/codes, then run:
+ADM2 source with a newer dataset, normalize the names/codes, then run:
 
 ```bash
 node tools/rasterize.mjs
 ```
 
-Good references for a future upgrade:
+Good references for future normalization:
 
-- GADM v4.1 adm2 data;
+- geoBoundaries metadata/API;
 - BIG or BPS-compatible administrative boundaries;
 - [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah) for official region
   codes and name mapping.
@@ -323,7 +326,8 @@ Code and pixel-rasterization work are released under the [MIT License](LICENSE).
 
 Boundary data is licensed separately by its upstream sources. Redistribution of
 derived data must keep the required attribution and comply with the relevant
-GADM / CC-BY-4.0 terms.
+CC-BY-4.0 / upstream terms.
 
 [prov-src]: https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces
+[geoboundaries]: https://www.geoboundaries.org/
 [kab-src]: https://github.com/tvalentius/Indonesia-topojson

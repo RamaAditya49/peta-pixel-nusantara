@@ -14,7 +14,7 @@
  * Catatan: field `m` (metrik/kepadatan per provinsi) diisi 0 di sini — ikat data
  * Anda sendiri (member, populasi, dsb) ke prov[].m untuk pewarnaan kepadatan.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -24,6 +24,9 @@ const W = parseInt(process.argv[2] || '1600', 10);
 const SEA8 = 255, SEA16 = 65535;
 
 const readJSON = (p) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
+const ADM2_SOURCE = existsSync(join(ROOT, 'sources/geoBoundaries-IDN-ADM2_simplified.geojson'))
+  ? 'sources/geoBoundaries-IDN-ADM2_simplified.geojson'
+  : 'sources/indonesia-topojson-city-regency.json';
 
 // ---- TopoJSON decode (delta-encoded arcs + quantized transform) ----
 function decode(topo) {
@@ -40,8 +43,26 @@ function decode(topo) {
   return obj.geometries.map(g => ({ props: g.properties, polys: polys(g) }));
 }
 
+function decodeGeoJSON(geojson) {
+  return geojson.features.map(f => {
+    const g = f.geometry || {};
+    const polys = g.type === 'Polygon'
+      ? [g.coordinates]
+      : g.type === 'MultiPolygon'
+        ? g.coordinates
+        : [];
+    return { props: f.properties || {}, polys };
+  });
+}
+
 const provGeoms = decode(readJSON('sources/indonesia-38-provinces.topo.json')).map(g => ({ name: g.props.PROVINSI, polys: g.polys }));
-let kabGeoms = decode(readJSON('sources/indonesia-topojson-city-regency.json')).map(g => {
+let kabGeoms = (ADM2_SOURCE.endsWith('.geojson') ? decodeGeoJSON(readJSON(ADM2_SOURCE)) : decode(readJSON(ADM2_SOURCE))).map(g => {
+  if (g.props.shapeType === 'ADM2') {
+    const rawName = g.props.shapeName || '';
+    const isKota = /^Kota\s+/i.test(rawName) && !/^Kota\s+Baru$/i.test(rawName);
+    const name = isKota ? rawName.replace(/^Kota\s+/i, '') : rawName;
+    return { name, prov1: null, type: isKota ? 'Kota' : 'Kabupaten', junk: !name, polys: g.polys };
+  }
   const isKota = g.props.TYPE_2 === 'Kotamadya' || g.props.ENGTYPE_2 === 'Municipality';
   const junk = g.props.TYPE_2 === 'Unknown' || /^n\.a/i.test(g.props.NAME_2 || '');
   let name = g.props.NAME_2 || ''; if (isKota) name = name.replace(/^Kota\s+/i, '');
@@ -83,6 +104,7 @@ const KG = new Uint16Array(W * H).fill(SEA16); raster(kabGeoms, KG, SEA16);
 
 // ---- kab -> province: majority vote over PG, fallback GADM NAME_1 ----
 const NAME1 = { 'Aceh': 'Aceh', 'Bali': 'Bali', 'Bangka-Belitung': 'Kepulauan Bangka Belitung', 'Banten': 'Banten', 'Bengkulu': 'Bengkulu', 'Gorontalo': 'Gorontalo', 'Irian Jaya Barat': 'Papua Barat', 'Papua Barat': 'Papua Barat', 'Jakarta Raya': 'DKI Jakarta', 'Jambi': 'Jambi', 'Jawa Barat': 'Jawa Barat', 'Jawa Tengah': 'Jawa Tengah', 'Jawa Timur': 'Jawa Timur', 'Kalimantan Barat': 'Kalimantan Barat', 'Kalimantan Selatan': 'Kalimantan Selatan', 'Kalimantan Tengah': 'Kalimantan Tengah', 'Kalimantan Timur': 'Kalimantan Timur', 'Kalimantan Utara': 'Kalimantan Utara', 'Kepulauan Riau': 'Kepulauan Riau', 'Lampung': 'Lampung', 'Maluku': 'Maluku', 'Maluku Utara': 'Maluku Utara', 'Nusa Tenggara Barat': 'Nusa Tenggara Barat', 'Nusa Tenggara Timur': 'Nusa Tenggara Timur', 'Papua': 'Papua', 'Riau': 'Riau', 'Sulawesi Barat': 'Sulawesi Barat', 'Sulawesi Selatan': 'Sulawesi Selatan', 'Sulawesi Tengah': 'Sulawesi Tengah', 'Sulawesi Tenggara': 'Sulawesi Tenggara', 'Sulawesi Utara': 'Sulawesi Utara', 'Sumatera Barat': 'Sumatera Barat', 'Sumatera Selatan': 'Sumatera Selatan', 'Sumatera Utara': 'Sumatera Utara', 'Yogyakarta': 'Daerah Istimewa Yogyakarta' };
+const ADM2_PROV = { 'Kepulauan Seribu': 'DKI Jakarta' };
 const votes = kabGeoms.map(() => ({}));
 const st = kabGeoms.map(() => ({ x0: 1e9, y0: 1e9, x1: -1, y1: -1, sx: 0, sy: 0, a: 0 }));
 for (let i = 0; i < KG.length; i++) {
@@ -93,7 +115,10 @@ for (let i = 0; i < KG.length; i++) {
 }
 const kab = kabGeoms.map((g, i) => {
   const v = votes[i]; let best = -1, bc = -1; for (const k in v) { if (v[k] > bc) { bc = v[k]; best = +k; } }
-  if (best < 0) { const m = NAME1[g.prov1]; best = (m != null && nameIdx[m] != null) ? nameIdx[m] : 255; }
+  if (best < 0) {
+    const m = ADM2_PROV[g.name] || NAME1[g.prov1];
+    best = (m != null && nameIdx[m] != null) ? nameIdx[m] : 255;
+  }
   const s = st[i];
   return { n: g.name, t: g.type, p: best, a: s.a, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, cx: s.a ? Math.round(s.sx / s.a) : 0, cy: s.a ? Math.round(s.sy / s.a) : 0 };
 });

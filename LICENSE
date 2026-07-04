@@ -26,4 +26,4 @@ NOTE: The MIT license above covers the CODE and the PIXEL-RASTERIZATION work
 (the grid generator, the renderer/demo, and the derived pixel-grid format).
 The underlying administrative BOUNDARY DATA is licensed separately — see
 ATTRIBUTION.md. Redistribution of the boundary-derived data must comply with
-those upstream terms (GADM / CC-BY-4.0).
+the relevant upstream terms, including CC-BY-4.0 attribution requirements.
