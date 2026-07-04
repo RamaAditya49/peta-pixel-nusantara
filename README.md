@@ -1,9 +1,13 @@
-# Peta Pixel Nusantara
+# Peta Pixel Nusantara - Peta Indonesia 8bit
 
-Peta Indonesia 8-bit yang bisa di-zoom dari 38 provinsi ke kabupaten/kota.
-Batas wilayah aslinya dirasterisasi menjadi grid pixel, lalu dirender dengan
-canvas nearest-neighbor supaya tetap tajam, ringan, dan bisa dipakai ulang di
-web, mobile, game engine, atau tool internal.
+**Peta Indonesia 8bit** yang bisa di-zoom dari 38 provinsi ke 519
+kabupaten/kota. Boundary asli Indonesia dirasterisasi menjadi grid pixel, lalu
+dirender dengan canvas nearest-neighbor supaya tetap tajam, ringan, dan mudah
+dipakai ulang di web, mobile, game engine, atau tool internal.
+
+In English: an **8-bit map of Indonesia** and **pixel map of Indonesia** with
+province and ADM2 coverage, packaged as open-source data plus a vanilla
+JavaScript interactive demo.
 
 ![Peta Pixel Nusantara preview](assets/preview.png)
 
@@ -29,6 +33,17 @@ Hasilnya adalah peta yang:
 - punya hit-test O(1) lewat indeks grid;
 - mudah di-port ke platform apa pun yang bisa menggambar persegi;
 - aman untuk data komunitas karena dirancang untuk angka agregat, bukan data personal.
+
+## Use Cases
+
+Pakai repo ini kalau kamu butuh:
+
+- peta Indonesia 8bit untuk landing page, komunitas, dashboard, atau game;
+- pixel map of Indonesia yang tetap tajam saat zoom;
+- interactive Indonesia map tanpa tile server;
+- data grid provinsi + kabupaten/kota Indonesia untuk canvas renderer;
+- contoh rasterizer GeoJSON/TopoJSON menjadi pixel grid;
+- base map agregat untuk komunitas, event, populasi, chapter, atau coverage.
 
 ## Demo
 
@@ -218,6 +233,21 @@ Untuk data komunitas, simpan angka agregat di `prov[].m` atau mapping eksternal
 berdasarkan nama/kode wilayah, lalu bucket-kan ke ramp warna. Peta ini tidak
 mengharuskan kamu memakai skema data aiclub.id.
 
+## Keywords
+
+Natural search phrases this project is built around:
+
+- peta indonesia 8bit
+- peta indonesia 8 bit
+- peta pixel indonesia
+- peta pixel nusantara
+- indonesia 8-bit map
+- indonesia pixel map
+- pixel map of indonesia
+- interactive indonesia map
+- indonesia map geojson
+- indonesia adm2 map
+
 ## How It Works
 
 Pipeline generator ada di [tools/rasterize.mjs](tools/rasterize.mjs):
@@ -319,6 +349,10 @@ Useful contribution areas:
 Please keep generated data reproducible: if you change files in `sources/`,
 also update the generated files in `data/` and explain the source/license in
 the PR.
+
+For contribution rules and verification commands, see
+[CONTRIBUTING.md](CONTRIBUTING.md). For AI coding agents, see
+[AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
 
 ## License
 

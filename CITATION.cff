@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this project, please cite it as below."
+title: "Peta Pixel Nusantara: Peta Indonesia 8bit"
+type: software
+authors:
+  - family-names: "Aditya"
+    given-names: "Rama"
+repository-code: "https://github.com/RamaAditya49/peta-pixel-nusantara"
+url: "https://github.com/RamaAditya49/peta-pixel-nusantara"
+abstract: >-
+  An open-source peta Indonesia 8bit and pixel map of Indonesia with 38
+  provinces and 519 ADM2 units, generated from boundary data into
+  RLE-compressed pixel grids for interactive rendering.
+keywords:
+  - peta indonesia 8bit
+  - peta pixel indonesia
+  - indonesia 8-bit map
+  - indonesia pixel map
+  - interactive indonesia map
+  - geoBoundaries
+license: MIT
