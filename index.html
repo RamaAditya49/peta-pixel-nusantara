@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peta Pixel Nusantara — demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#05070E; --panel:#070B14; --line:#1D2C4C; --ink:#EAF4FF; --mut:#8CA2C8; --dim:#5E7196; --cyan:#00E5FF; --yellow:#FFE500; --mag:#FF00E5; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:'Space Grotesk',system-ui,sans-serif; }
+  .wrap{ padding:32px; }
+  .frame{ max-width:1080px; margin:0 auto; border:3px solid var(--line); background:var(--panel); box-shadow:0 24px 60px rgba(0,0,0,.5); }
+  .pixel{ font-family:'Press Start 2P',monospace; }
+  .vt{ font-family:'VT323',monospace; }
+  .row{ display:flex; align-items:center; }
+  .hd{ justify-content:space-between; padding:15px 20px; border-bottom:2px solid var(--line); flex-wrap:wrap; gap:12px; }
+  .crumb{ justify-content:space-between; padding:10px 20px; border-bottom:2px solid var(--line); gap:10px; }
+  .stagewrap{ position:relative; display:flex; }
+  .stage{ position:relative; flex:1; background:var(--panel); overflow:hidden; }
+  canvas.map{ image-rendering:pixelated; image-rendering:crisp-edges; display:block; width:100%; height:auto; touch-action:none; cursor:crosshair; }
+  .btn{ cursor:pointer; background:transparent; border:2px solid var(--line); color:var(--cyan); font-family:'Press Start 2P',monospace; }
+  .zbtn{ width:38px; height:38px; background:#0B1120; border:2px solid var(--line); color:var(--cyan); font-family:'Press Start 2P',monospace; font-size:13px; cursor:pointer; }
+  .zbtn:hover{ border-color:var(--cyan); }
+  .tip{ position:absolute; left:0; top:0; display:none; transform:translate(-50%,-115%); pointer-events:none; z-index:6; flex-direction:column; align-items:center; }
+  .legend{ position:absolute; left:16px; bottom:14px; z-index:4; background:rgba(11,17,32,.92); border:2px solid var(--line); padding:11px 13px; display:flex; flex-direction:column; gap:8px; }
+  .zoomc{ position:absolute; right:16px; top:16px; z-index:4; display:flex; flex-direction:column; gap:6px; }
+  .hint{ position:absolute; right:16px; bottom:14px; z-index:4; font-family:'VT323',monospace; font-size:15px; color:#46586E; text-align:right; line-height:1.3; }
+  .panel{ width:320px; flex:none; align-self:stretch; background:#0B1120; border-left:2px solid var(--line); padding:20px; display:none; flex-direction:column; gap:16px; position:relative; z-index:7; max-height:520px; overflow:auto; }
+  .ft{ justify-content:space-between; padding:12px 20px; border-top:2px solid var(--line); flex-wrap:wrap; gap:8px; }
+  a{ color:var(--cyan); }
+  .listbtn{ cursor:pointer; text-align:left; border:2px solid var(--line); background:#111B33; padding:8px 11px; display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; }
+  .listbtn:hover{ border-color:var(--cyan); }
+  @keyframes blink{ 0%,49%{opacity:1} 50%,100%{opacity:0} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="frame">
+    <!-- header -->
+    <div class="row hd">
+      <div class="row" style="gap:12px">
+        <svg width="26" height="26" viewBox="0 0 8 8" shape-rendering="crispEdges"><rect x="2" y="0" width="4" height="1" fill="#00E5FF"></rect><rect x="1" y="1" width="6" height="1" fill="#00E5FF"></rect><rect x="0" y="2" width="3" height="2" fill="#00E5FF"></rect><rect x="5" y="2" width="3" height="2" fill="#00E5FF"></rect><rect x="1" y="4" width="6" height="1" fill="#00E5FF"></rect><rect x="2" y="5" width="4" height="1" fill="#00E5FF"></rect><rect x="3" y="6" width="2" height="2" fill="#00E5FF"></rect><rect x="3" y="2" width="2" height="2" fill="#FFE500"></rect></svg>
+        <div style="display:flex; flex-direction:column; gap:2px">
+          <span class="pixel" style="font-size:11px">PETA PIXEL <span style="color:var(--yellow)">NUSANTARA</span></span>
+          <span class="vt" style="font-size:16px; color:var(--dim)">38 provinsi · <span id="kabCount">…</span> kabupaten/kota · batas wilayah asli</span>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:1px">
+        <span class="vt" id="natVal" style="font-size:30px; line-height:1; color:var(--cyan)">—</span>
+        <span class="pixel" style="font-size:7px; color:var(--mut)">TOTAL NILAI CONTOH</span>
+      </div>
+    </div>
+    <!-- breadcrumb -->
+    <div class="row crumb">
+      <div class="vt" id="crumb" style="font-size:19px; color:var(--mut)">&gt; INDONESIA_<span style="display:inline-block; width:8px; height:16px; background:var(--cyan); margin-left:3px; vertical-align:middle; animation:blink 1s steps(1) infinite"></span></div>
+      <button class="btn" id="backBtn" style="font-size:8px; padding:7px 11px; display:none" onmouseover="this.style.borderColor='#00E5FF'" onmouseout="this.style.borderColor='#1D2C4C'">[ESC] SELURUH INDONESIA</button>
+    </div>
+    <!-- stage + panel -->
+    <div class="stagewrap">
+      <div class="stage" id="stage">
+        <canvas class="map" id="cv" width="1600" height="594"></canvas>
+        <div class="tip" id="tip"></div>
+        <div class="legend">
+          <div class="pixel" id="legendLabel" style="font-size:7px; color:var(--mut)">NILAI CONTOH / PROVINSI</div>
+          <div class="row" id="legendRow" style="align-items:flex-end; gap:6px"></div>
+        </div>
+        <div class="zoomc">
+          <button class="zbtn" id="zin">+</button>
+          <button class="zbtn" id="zout">−</button>
+          <button class="zbtn" id="zreset" style="color:#8CA2C8; font-size:9px" onmouseover="this.style.borderColor='#FFE500';this.style.color='#FFE500'" onmouseout="this.style.borderColor='#1D2C4C';this.style.color='#8CA2C8'">⟲</button>
+        </div>
+        <div class="hint" id="hint">geser untuk pan · scroll zoom<br>klik provinsi untuk kabupaten</div>
+      </div>
+      <div class="panel" id="panel"></div>
+    </div>
+    <!-- footer -->
+    <div class="row ft">
+      <span class="vt" style="font-size:17px; color:var(--yellow)">&gt; PETA PIXEL NUSANTARA — OPEN SOURCE_</span>
+      <span style="font-size:11px; color:#46586E">© Rama Aditya · batas: GADM adm1/adm2 · CC-BY-4.0</span>
+    </div>
+  </div>
+</div>
+
+<script src="./data/peta-hd-data.js"></script>
+<script>
+(function(){
+  var RAMP = ["#131C33","#0E3C50","#0E607A","#00A7C4","#00E5FF"];
+  var SEA8=255, SEA16=65535;
+  var hex = function(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; };
+  var fmt = function(n){ return (n||0).toLocaleString('id-ID'); };
+  var bProv = function(m){ if(m<=0)return 0; if(m<50)return 1; if(m<150)return 2; if(m<400)return 3; return 4; };
+
+  function boot(D){
+    var W=D.W, H=D.H, cv=document.getElementById('cv');
+    document.getElementById('kabCount').textContent = D.kab.length;
+    // inflate grids
+    function inflate(rle, Ctor){ var g=new Ctor(W*H), o=0; for(var i=0;i<rle.length;i+=2){ var v=rle[i],c=rle[i+1]; for(var j=0;j<c;j++) g[o++]=v; } return g; }
+    var PG=inflate(D.provRle, Uint8Array), KG=inflate(D.kabRle, Uint16Array);
+    // legend
+    var lr=document.getElementById('legendRow');
+    ['0','1','50','150','400+'].forEach(function(lab,i){ var d=document.createElement('div'); d.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px'; d.innerHTML='<div style="width:22px;height:14px;background:'+RAMP[i]+'"></div><span class="vt" style="font-size:13px;color:#8CA2C8">'+lab+'</span>'; lr.appendChild(d); });
+    // base province canvas
+    var rgb=RAMP.map(hex);
+    var baseCv=document.createElement('canvas'); baseCv.width=W; baseCv.height=H;
+    (function(){ var ctx=baseCv.getContext('2d'), img=ctx.createImageData(W,H), d=img.data; for(var i=0;i<PG.length;i++){ var v=PG[i], q=i*4; if(v===SEA8){ d[q+3]=0; } else { var c=rgb[bProv(D.prov[v].m)]; d[q]=c[0];d[q+1]=c[1];d[q+2]=c[2];d[q+3]=255; } } ctx.putImageData(img,0,0); })();
+    var provKabCv=document.createElement('canvas'); provKabCv.width=W; provKabCv.height=H;
+    var hiCv=document.createElement('canvas'); hiCv.width=W; hiCv.height=H;
+    var pickCv=document.createElement('canvas'); pickCv.width=W; pickCv.height=H;
+
+    var aspect=cv.height/cv.width;
+    var view={vx:0,vy:0,vw:W,vh:W*aspect}, full={vx:0,vy:0,vw:W,vh:W*aspect};
+    var S={ level:'nat', selProv:null, selKab:null };
+    var hover=null, hiKey=null, pickKey=null, drag=null;
+
+    function paintPred(cv2, pred, bb, fill, borderHex){
+      var ctx=cv2.getContext('2d'); ctx.clearRect(0,0,W,H); var img=ctx.getImageData(0,0,W,H), d=img.data, fb=hex(borderHex);
+      for(var y=bb.y0;y<=bb.y1;y++)for(var x=bb.x0;x<=bb.x1;x++){ var o=y*W+x; if(!pred(o))continue;
+        var edge=(x===0||!pred(o-1))||(x===W-1||!pred(o+1))||(y===0||!pred(o-W))||(y===H-1||!pred(o+W)); var q=o*4;
+        if(edge){ d[q]=fb[0];d[q+1]=fb[1];d[q+2]=fb[2];d[q+3]=255; } else { d[q]=fill[0];d[q+1]=fill[1];d[q+2]=fill[2];d[q+3]=fill[3]; } }
+      ctx.putImageData(img,0,0);
+    }
+    function buildProvKab(pi){
+      var p=D.prov[pi], ctx=provKabCv.getContext('2d'); ctx.clearRect(0,0,W,H); var img=ctx.getImageData(0,0,W,H), d=img.data;
+      var inProv={}; (D.provKab[pi]||[]).forEach(function(k){ inProv[k]=1; });
+      var fillc=rgb[2];
+      for(var y=p.y0;y<=p.y1;y++)for(var x=p.x0;x<=p.x1;x++){ var o=y*W+x, kv=KG[o]; if(kv===SEA16||!inProv[kv])continue;
+        var edge=(x===0||KG[o-1]!==kv)||(x===W-1||KG[o+1]!==kv)||(y===0||KG[o-W]!==kv)||(y===H-1||KG[o+W]!==kv); var q=o*4;
+        if(edge){ d[q]=7;d[q+1]=11;d[q+2]=20;d[q+3]=255; } else { d[q]=fillc[0];d[q+1]=fillc[1];d[q+2]=fillc[2];d[q+3]=255; } }
+      ctx.putImageData(img,0,0);
+    }
+    function buildHi(hv){ if(hv.type==='prov'){ var p=D.prov[hv.idx]; paintPred(hiCv,function(o){return PG[o]===hv.idx;},p,[255,255,255,66],'#FFE500'); } else { var k=D.kab[hv.idx]; paintPred(hiCv,function(o){return KG[o]===hv.idx;},k,[255,255,255,80],'#FFE500'); } }
+
+    function draw(){
+      var ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; var dw=cv.width, dh=cv.height;
+      ctx.fillStyle='#070B14'; ctx.fillRect(0,0,dw,dh);
+      ctx.drawImage(baseCv, view.vx,view.vy,view.vw,view.vh, 0,0,dw,dh);
+      if(S.level==='prov'){
+        ctx.fillStyle='rgba(7,11,20,0.68)'; ctx.fillRect(0,0,dw,dh);
+        ctx.drawImage(provKabCv, view.vx,view.vy,view.vw,view.vh, 0,0,dw,dh);
+        if(S.selKab!=null){ if(pickKey!==S.selKab){ var k=D.kab[S.selKab]; paintPred(pickCv,function(o){return KG[o]===S.selKab;},k,[255,255,255,60],'#00E5FF'); pickKey=S.selKab; } ctx.drawImage(pickCv, view.vx,view.vy,view.vw,view.vh, 0,0,dw,dh); }
+      }
+      if(hover){ var active = S.level==='prov' ? (hover.type==='kab'&&hover.idx!==S.selKab) : (hover.type==='prov');
+        if(active){ var key=hover.type+hover.idx; if(hiKey!==key){ buildHi(hover); hiKey=key; } ctx.drawImage(hiCv, view.vx,view.vy,view.vw,view.vh, 0,0,dw,dh); } }
+    }
+    function clamp(){ var v=view; v.vw=Math.max(40,Math.min(W,v.vw)); v.vh=v.vw*aspect; if(v.vh>H){ v.vh=H; v.vw=v.vh/aspect; } v.vx=Math.max(0,Math.min(W-v.vw,v.vx)); v.vy=Math.max(0,Math.min(H-v.vh,v.vy)); }
+    function anim(t){ if(anim._r)cancelAnimationFrame(anim._r); var f={vx:view.vx,vy:view.vy,vw:view.vw,vh:view.vh}, t0=performance.now(),dur=440;
+      (function step(){ var p=Math.min(1,(performance.now()-t0)/dur), e=1-Math.pow(1-p,3); view={vx:f.vx+(t.vx-f.vx)*e,vy:f.vy+(t.vy-f.vy)*e,vw:f.vw+(t.vw-f.vw)*e,vh:f.vh+(t.vh-f.vh)*e}; draw(); if(p<1)anim._r=requestAnimationFrame(step); })(); }
+    function viewFor(bb,pad){ var cx=(bb.x0+bb.x1)/2+0.5, cy=(bb.y0+bb.y1)/2+0.5; var vw=Math.max((bb.x1-bb.x0+1)*pad,(bb.y1-bb.y0+1)*pad/aspect,46); vw=Math.min(vw,W); var vh=vw*aspect; if(vh>H){vh=H;vw=vh/aspect;} var vx=Math.max(0,Math.min(W-vw,cx-vw/2)), vy=Math.max(0,Math.min(H-vh,cy-vh/2)); return {vx:vx,vy:vy,vw:vw,vh:vh}; }
+
+    // ---- chrome / panel ----
+    var crumbEl=document.getElementById('crumb'), backBtn=document.getElementById('backBtn'), panel=document.getElementById('panel'), legendLabel=document.getElementById('legendLabel'), hintEl=document.getElementById('hint');
+    function slug(s){ return s.toUpperCase().replace(/ /g,'-'); }
+    function updateChrome(){
+      var caret='<span style="display:inline-block;width:8px;height:16px;background:#00E5FF;margin-left:3px;vertical-align:middle;animation:blink 1s steps(1) infinite"></span>';
+      var c='> INDONESIA_';
+      if(S.selProv!=null){ var p=D.prov[S.selProv]; c='> INDONESIA / '+slug(p.n)+'_';
+        if(S.selKab!=null){ var k=D.kab[S.selKab]; c='> INDONESIA / '+slug(p.n)+' / '+(k.t==='Kota'?'KOTA-':'KAB-')+slug(k.n)+'_'; } }
+      crumbEl.innerHTML=c+caret;
+      backBtn.style.display = S.level==='prov' ? 'block':'none';
+      backBtn.textContent = S.selKab!=null ? '[ESC] KEMBALI KE PROVINSI' : '[ESC] SELURUH INDONESIA';
+      legendLabel.textContent = S.level==='prov' ? 'KAB/KOTA (outline)' : 'NILAI CONTOH / PROVINSI';
+      hintEl.innerHTML = S.level==='prov' ? 'hover kab/kota · scroll zoom<br>klik untuk detail' : 'geser untuk pan · scroll zoom<br>klik provinsi untuk kabupaten';
+    }
+    function renderPanel(){
+      if(S.selKab!=null){ var k=D.kab[S.selKab], p=D.prov[k.p];
+        panel.style.display='flex';
+        panel.innerHTML =
+          '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px">'
+          +'<div style="display:flex;flex-direction:column;gap:5px"><span class="vt" style="font-size:16px;color:#00E5FF">'+(k.t==='Kota'?'KOTA':'KABUPATEN')+' · '+p.n+'</span><span class="pixel" style="font-size:13px;line-height:1.5">'+(k.t==='Kota'?'KOTA ':'')+k.n.toUpperCase()+'</span></div>'
+          +'<button class="btn" id="xkab" style="font-size:9px;padding:6px 9px;color:#8CA2C8;border-color:#1D2C4C">✕</button></div>'
+          +'<div style="display:flex;flex-direction:column;gap:12px">'
+            +field('JENIS', k.t==='Kota'?'Kota':'Kabupaten')
+            +field('PROVINSI', p.n)
+            +field('LUAS (sel grid)', fmt(k.a))
+            +field('POSISI SEL (cx,cy)', k.cx+', '+k.cy)
+          +'</div>'
+          +'<div style="display:flex;gap:8px;align-items:flex-start"><div style="width:8px;height:8px;background:#FFE500;flex-shrink:0;margin-top:3px"></div><span style="font-size:11px;line-height:1.5;color:#5E7196">Ikat metrik apa pun ke unit ini (mis. member, populasi) untuk pewarnaan kepadatan level kabupaten.</span></div>';
+        document.getElementById('xkab').onclick=back;
+      } else if(S.selProv!=null){ var pp=D.prov[S.selProv]; var list=(D.provKab[S.selProv]||[]).map(function(i){return {i:i,k:D.kab[i]};}).sort(function(a,b){return b.k.a-a.k.a;});
+        panel.style.display='flex';
+        var rows=list.map(function(o){ return '<button class="listbtn" data-k="'+o.i+'"><span style="font-size:13px;color:#EAF4FF"><span class="vt" style="font-size:15px;color:#5E7196">'+(o.k.t==='Kota'?'Kota':'Kab.')+'</span> '+o.k.n+'</span><span class="vt" style="font-size:16px;color:#5E7196">'+fmt(o.k.a)+' sel</span></button>'; }).join('');
+        panel.innerHTML =
+          '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px">'
+          +'<div style="display:flex;flex-direction:column;gap:5px"><span class="vt" style="font-size:16px;color:#00E5FF">PROVINSI</span><span class="pixel" style="font-size:13px;line-height:1.5">'+pp.n.toUpperCase()+'</span></div>'
+          +'<button class="btn" id="xprov" style="font-size:9px;padding:6px 9px;color:#8CA2C8;border-color:#1D2C4C">✕</button></div>'
+          +'<div class="row" style="align-items:flex-end;gap:11px"><div class="vt" style="font-size:52px;line-height:.8;color:#00E5FF">'+list.length+'</div><div class="pixel" style="font-size:8px;color:#8CA2C8;padding-bottom:6px">KAB / KOTA</div></div>'
+          +field('NILAI CONTOH (m)', fmt(pp.m))
+          +'<div style="display:flex;flex-direction:column;gap:8px"><div class="pixel" style="font-size:8px;color:#8CA2C8">KAB/KOTA — KLIK UNTUK DETAIL</div><div style="display:flex;flex-direction:column;gap:6px">'+rows+'</div></div>';
+        document.getElementById('xprov').onclick=back;
+        Array.prototype.forEach.call(panel.querySelectorAll('[data-k]'), function(b){ b.onclick=function(){ selectKab(+b.getAttribute('data-k')); }; });
+      } else { panel.style.display='none'; panel.innerHTML=''; }
+    }
+    function field(label,val){ return '<div style="display:flex;flex-direction:column;gap:3px"><span class="pixel" style="font-size:8px;color:#8CA2C8">'+label+'</span><span class="vt" style="font-size:22px;color:#EAF4FF">'+val+'</span></div>'; }
+
+    // ---- interaction ----
+    function toBase(e){ var r=cv.getBoundingClientRect(), mx=(e.clientX-r.left)/r.width*cv.width, my=(e.clientY-r.top)/r.height*cv.height; return {bx:view.vx+mx/cv.width*view.vw, by:view.vy+my/cv.height*view.vh, mx:mx, my:my}; }
+    function pick(bx,by){ var x=Math.floor(bx),y=Math.floor(by); if(x<0||y<0||x>=W||y>=H)return null; var o=y*W+x;
+      if(S.level==='prov'){ var kv=KG[o]; if(kv===SEA16||D.kab[kv].p!==S.selProv)return null; return {type:'kab',idx:kv}; }
+      var pv=PG[o]; if(pv===SEA8)return null; return {type:'prov',idx:pv}; }
+    var tip=document.getElementById('tip');
+    cv.addEventListener('mousemove', function(e){ if(drag){ panMove(e); return; }
+      var b=toBase(e), hit=pick(b.bx,b.by), same=(hit&&hover)&&hit.type===hover.type&&hit.idx===hover.idx;
+      if(!same){ hover=hit; draw(); }
+      if(!hit){ tip.style.display='none'; return; }
+      var r=cv.getBoundingClientRect(), nm,val,col;
+      if(hit.type==='prov'){ var p=D.prov[hit.idx]; nm=p.n.toUpperCase(); val=fmt(p.m); col='#00E5FF'; }
+      else { var k=D.kab[hit.idx]; nm=(k.t==='Kota'?'KOTA ':'KAB. ')+k.n.toUpperCase(); val=fmt(k.a)+' sel'; col='#00E5FF'; }
+      tip.style.display='flex'; tip.style.left=(b.mx/cv.width*r.width)+'px'; tip.style.top=(b.my/cv.height*r.height)+'px';
+      tip.innerHTML='<div style="background:#070B14;border:2px solid #00E5FF;padding:6px 10px;display:flex;flex-direction:column;gap:1px;align-items:center"><span class="pixel" style="font-size:7px;color:#8CA2C8;white-space:nowrap">'+nm+'</span><span class="vt" style="font-size:22px;line-height:1;color:'+col+'">'+val+'</span></div><div style="width:7px;height:7px;background:#00E5FF;margin-top:-4px;transform:rotate(45deg)"></div>';
+    });
+    cv.addEventListener('mouseleave', function(){ hover=null; tip.style.display='none'; draw(); });
+    cv.addEventListener('wheel', function(e){ e.preventDefault(); var b=toBase(e), f=e.deltaY<0?0.82:1.22; zoomAt(b.bx,b.by,b.mx/cv.width,b.my/cv.height,f); }, {passive:false});
+    cv.addEventListener('pointerdown', function(e){ drag={x:e.clientX,y:e.clientY,moved:0,view:{vx:view.vx,vy:view.vy,vw:view.vw,vh:view.vh}}; try{cv.setPointerCapture(e.pointerId);}catch(_){}});
+    cv.addEventListener('pointerup', function(e){ var dg=drag; drag=null; if(dg&&dg.moved<5){ var b=toBase(e), hit=pick(b.bx,b.by); if(hit){ if(hit.type==='prov')selectProv(hit.idx); else selectKab(hit.idx); } } });
+    cv.addEventListener('pointercancel', function(){ drag=null; });
+    function panMove(e){ drag.moved+=Math.abs(e.movementX)+Math.abs(e.movementY); var r=cv.getBoundingClientRect(); view.vx=drag.view.vx-(e.clientX-drag.x)/r.width*view.vw; view.vy=drag.view.vy-(e.clientY-drag.y)/r.height*view.vh; clamp(); draw(); }
+    function zoomAt(bx,by,fx,fy,f){ view.vw*=f; view.vh=view.vw*aspect; view.vx=bx-fx*view.vw; view.vy=by-fy*view.vh; clamp(); draw(); }
+
+    function selectProv(pi){ hover=null; tip.style.display='none'; buildProvKab(pi); hiKey=null; S.level='prov'; S.selProv=pi; S.selKab=null; updateChrome(); renderPanel(); anim(viewFor(D.prov[pi],1.65)); }
+    function selectKab(ki){ hover=null; tip.style.display='none'; S.selKab=ki; updateChrome(); renderPanel(); draw(); }
+    function back(){ if(S.selKab!=null){ hover=null; tip.style.display='none'; S.selKab=null; updateChrome(); renderPanel(); draw(); } else { reset(); } }
+    function reset(){ hover=null; tip.style.display='none'; hiKey=null; S.level='nat'; S.selProv=null; S.selKab=null; updateChrome(); renderPanel(); anim({vx:full.vx,vy:full.vy,vw:full.vw,vh:full.vh}); }
+    document.getElementById('zin').onclick=function(){ zoomAt(view.vx+view.vw/2,view.vy+view.vh/2,0.5,0.5,0.7); };
+    document.getElementById('zout').onclick=function(){ zoomAt(view.vx+view.vw/2,view.vy+view.vh/2,0.5,0.5,1.45); };
+    document.getElementById('zreset').onclick=reset;
+    document.getElementById('backBtn').onclick=back;
+    window.addEventListener('keydown', function(e){ if(e.key==='Escape')back(); });
+
+    // national total (sample)
+    document.getElementById('natVal').textContent = fmt(D.prov.reduce(function(s,p){return s+(p.m||0);},0));
+    updateChrome(); draw();
+  }
+
+  function ready(){ if(window.PETA_HD){ boot(window.PETA_HD); } else { setTimeout(ready,60); } }
+  ready();
+})();
+</script>
+</body>
+</html>
