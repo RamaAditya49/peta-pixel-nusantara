@@ -18,18 +18,34 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+try {
 const DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(DIR, '..');
-const W = parseInt(process.argv[2] || '1600', 10);
+const W = Number(process.argv[2] || 1600);
 const SEA8 = 255, SEA16 = 65535;
 
-const readJSON = (p) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
+if (!Number.isInteger(W) || W < 100 || W > 10000) {
+  throw new Error('grid width must be an integer between 100 and 10000');
+}
+
+const readJSON = (p) => {
+  try {
+    return JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error(`source file not found: ${p}`);
+    if (error instanceof SyntaxError) throw new Error(`invalid JSON in ${p}: ${error.message}`);
+    throw new Error(`cannot read ${p}: ${error.message}`);
+  }
+};
 const ADM2_SOURCE = existsSync(join(ROOT, 'sources/geoBoundaries-IDN-ADM2_simplified.geojson'))
   ? 'sources/geoBoundaries-IDN-ADM2_simplified.geojson'
   : 'sources/indonesia-topojson-city-regency.json';
 
 // ---- TopoJSON decode (delta-encoded arcs + quantized transform) ----
 function decode(topo) {
+  if (!topo || !Array.isArray(topo.arcs) || !topo.objects || typeof topo.objects !== 'object') {
+    throw new Error('invalid TopoJSON: expected arcs and objects');
+  }
   const hasT = !!topo.transform;
   const sx = hasT ? topo.transform.scale[0] : 1, sy = hasT ? topo.transform.scale[1] : 1;
   const tx = hasT ? topo.transform.translate[0] : 0, ty = hasT ? topo.transform.translate[1] : 0;
@@ -39,11 +55,18 @@ function decode(topo) {
   });
   const ring = (list) => { const c = []; list.forEach((ai, k) => { let a = ai >= 0 ? arcs[ai] : arcs[~ai].slice().reverse(); const s = k === 0 ? 0 : 1; for (let i = s; i < a.length; i++) c.push(a[i]); }); return c; };
   const polys = (g) => g.type === 'Polygon' ? [g.arcs.map(ring)] : g.type === 'MultiPolygon' ? g.arcs.map(pp => pp.map(ring)) : [];
-  const obj = topo.objects[Object.keys(topo.objects)[0]];
+  const keys = Object.keys(topo.objects);
+  if (!keys.length) throw new Error('invalid TopoJSON: no geometry object');
+  if (keys.length > 1) console.warn(`Warning: TopoJSON has ${keys.length} objects; using "${keys[0]}"`);
+  const obj = topo.objects[keys[0]];
+  if (!Array.isArray(obj.geometries)) throw new Error(`invalid TopoJSON object: ${keys[0]}`);
   return obj.geometries.map(g => ({ props: g.properties, polys: polys(g) }));
 }
 
 function decodeGeoJSON(geojson) {
+  if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) {
+    throw new Error('invalid GeoJSON: expected a FeatureCollection');
+  }
   return geojson.features.map(f => {
     const g = f.geometry || {};
     const polys = g.type === 'Polygon'
@@ -61,12 +84,12 @@ let kabGeoms = (ADM2_SOURCE.endsWith('.geojson') ? decodeGeoJSON(readJSON(ADM2_S
     const rawName = g.props.shapeName || '';
     const isKota = /^Kota\s+/i.test(rawName) && !/^Kota\s+Baru$/i.test(rawName);
     const name = isKota ? rawName.replace(/^Kota\s+/i, '') : rawName;
-    return { name, prov1: null, type: isKota ? 'Kota' : 'Kabupaten', junk: !name, polys: g.polys };
+    return { code: g.props.shapeID || null, name, prov1: null, type: isKota ? 'Kota' : 'Kabupaten', junk: !name, polys: g.polys };
   }
   const isKota = g.props.TYPE_2 === 'Kotamadya' || g.props.ENGTYPE_2 === 'Municipality';
   const junk = g.props.TYPE_2 === 'Unknown' || /^n\.a/i.test(g.props.NAME_2 || '');
   let name = g.props.NAME_2 || ''; if (isKota) name = name.replace(/^Kota\s+/i, '');
-  return { name, prov1: g.props.NAME_1, type: isKota ? 'Kota' : 'Kabupaten', junk, polys: g.polys };
+  return { code: g.props.HASC_2 || null, name, prov1: g.props.NAME_1, type: isKota ? 'Kota' : 'Kabupaten', junk, polys: g.polys };
 });
 kabGeoms = kabGeoms.filter(k => !k.junk);
 
@@ -79,6 +102,9 @@ const scan = gs => gs.forEach(g => g.polys.forEach(rr => rr.forEach(r => r.forEa
   if (lo < lonMin) lonMin = lo; if (lo > lonMax) lonMax = lo; if (la < latMin) latMin = la; if (la > latMax) latMax = la;
 }))));
 scan(provGeoms); scan(kabGeoms);
+if (![lonMin, lonMax, latMin, latMax].every(Number.isFinite) || lonMax <= lonMin || latMax <= latMin) {
+  throw new Error('empty or invalid geometry bounds');
+}
 const H = Math.round(W * (latMax - latMin) / (lonMax - lonMin));
 const gx = lo => (lo - lonMin) / (lonMax - lonMin) * (W - 1);
 const gy = la => (latMax - la) / (latMax - latMin) * (H - 1);
@@ -86,13 +112,20 @@ const gy = la => (latMax - la) / (latMax - latMin) * (H - 1);
 // ---- scanline polygon fill ----
 function raster(geoms, grid, SEA) {
   geoms.forEach((g, idx) => g.polys.forEach(rings => {
-    const R = rings.map(r => r.map(([lo, la]) => [gx(lo), gy(la)]));
+    const valid = rings.filter(r => r.length >= 3 && r.every(([lo, la]) => Number.isFinite(lo) && Number.isFinite(la)) && Math.abs(r.reduce((area, p, i) => {
+      const next = r[(i + 1) % r.length];
+      return area + p[0] * next[1] - next[0] * p[1];
+    }, 0)) > Number.EPSILON);
+    if (valid.length !== rings.length) console.warn(`Warning: skipped invalid ring in geometry ${idx}`);
+    if (!valid.length) return;
+    const R = valid.map(r => r.map(([lo, la]) => [gx(lo), gy(la)]));
     let yMin = Infinity, yMax = -Infinity; R.forEach(r => r.forEach(p => { if (p[1] < yMin) yMin = p[1]; if (p[1] > yMax) yMax = p[1]; }));
     const y0 = Math.max(0, Math.floor(yMin)), y1 = Math.min(H - 1, Math.ceil(yMax));
     for (let y = y0; y <= y1; y++) {
       const yc = y + 0.5, xs = [];
-      R.forEach(r => { for (let i = 0, n = r.length; i < n; i++) { const a = r[i], b = r[(i + 1) % n]; if ((a[1] <= yc && b[1] > yc) || (b[1] <= yc && a[1] > yc)) { const t = (yc - a[1]) / (b[1] - a[1]); xs.push(a[0] + t * (b[0] - a[0])); } } });
+      R.forEach(r => { for (let i = 0, n = r.length; i < n; i++) { const a = r[i], b = r[(i + 1) % n]; if (a[1] === b[1]) continue; if ((a[1] <= yc && b[1] > yc) || (b[1] <= yc && a[1] > yc)) { const t = (yc - a[1]) / (b[1] - a[1]); xs.push(a[0] + t * (b[0] - a[0])); } } });
       xs.sort((p, q) => p - q);
+      if (xs.length % 2) { console.warn(`Warning: odd intersection count at y=${y}; last point dropped`); xs.pop(); }
       for (let k = 0; k + 1 < xs.length; k += 2) { let ca = Math.ceil(xs[k] - 0.5), cb = Math.floor(xs[k + 1] - 0.5); if (ca < 0) ca = 0; if (cb > W - 1) cb = W - 1; for (let x = ca; x <= cb; x++) grid[y * W + x] = idx; }
     }
     // tandai sel-vertex agar pulau kecil / sliver tidak hilang
@@ -120,7 +153,7 @@ const kab = kabGeoms.map((g, i) => {
     best = (m != null && nameIdx[m] != null) ? nameIdx[m] : 255;
   }
   const s = st[i];
-  return { n: g.name, t: g.type, p: best, a: s.a, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, cx: s.a ? Math.round(s.sx / s.a) : 0, cy: s.a ? Math.round(s.sy / s.a) : 0 };
+  return { c: g.code, n: g.name, t: g.type, p: best, a: s.a, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, cx: s.a ? Math.round(s.sx / s.a) : 0, cy: s.a ? Math.round(s.sy / s.a) : 0 };
 });
 
 // ---- province metadata ----
@@ -131,7 +164,7 @@ for (let i = 0; i < PG.length; i++) {
 }
 const prov = provNames.map((n, i) => { const s = pst[i]; return { n, m: 0, a: s.a, x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, cx: s.a ? Math.round(s.sx / s.a) : 0, cy: s.a ? Math.round(s.sy / s.a) : 0 }; });
 
-const provKab = {}; kab.forEach((k, i) => { if (k.p === 255) return; (provKab[k.p] = provKab[k.p] || []).push(i); });
+const provKab = Array.from({ length: prov.length }, () => []); kab.forEach((k, i) => { if (k.p !== 255) provKab[k.p].push(i); });
 
 // ---- RLE ----
 const rle = a => { const r = []; let c = a[0], n = 1; for (let i = 1; i < a.length; i++) { if (a[i] === c) n++; else { r.push(c, n); c = a[i]; n = 1; } } r.push(c, n); return r; };
@@ -146,3 +179,7 @@ const kota = kab.filter(k => k.t === 'Kota').length;
 console.log(`grid ${W}x${H} · ${prov.length} provinsi · ${kab.length} kab/kota (${kota} Kota + ${kab.length - kota} Kabupaten)`);
 console.log(`ditulis: data/peta-hd-data.js (${Math.round(json.length / 1024)} KB) + .json`);
 console.log('catatan: prov[].m = 0 — ikat metrik Anda sendiri untuk pewarnaan kepadatan.');
+} catch (error) {
+  console.error(`Error: ${error.message}`);
+  process.exitCode = 1;
+}

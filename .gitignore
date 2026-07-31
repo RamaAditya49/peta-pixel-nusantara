@@ -1,7 +1,13 @@
 # OS / editor
 .DS_Store
 Thumbs.db
+desktop.ini
 *.log
+*.swp
+.idea/
+.vscode/
+.env
+.env.*
 
 # Node
 node_modules/
@@ -10,3 +16,12 @@ npm-debug.log*
 # Build / scratch
 /tmp/
 *.tmp
+
+# Local agent/audit support
+AGENTS_PR_RULE.md
+PR_SKILLS.md
+PRE-PR.md
+AUDIT_PR/
+codex-security/
+humanizer/
+superpowers/

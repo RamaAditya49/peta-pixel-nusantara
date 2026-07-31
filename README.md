@@ -28,7 +28,8 @@ grid pixel yang bisa dibaca seperti data biasa.
 
 Hasilnya adalah peta yang:
 
-- bekerja offline setelah file dimuat;
+- data dan renderer bekerja offline setelah file dimuat; font web akan memakai
+  fallback sistem jika CDN tidak tersedia;
 - tajam di zoom berapa pun;
 - punya hit-test O(1) lewat indeks grid;
 - mudah di-port ke platform apa pun yang bisa menggambar persegi;
@@ -73,6 +74,7 @@ Tidak ada build step, framework, bundler, atau backend. Demo ada di
 | Province | 38 provinsi Indonesia | `prov[]` + `provRle` |
 | Regency / city | 519 ADM2 units from geoBoundaries | `kab[]` + `kabRle` |
 | Relationship | kabupaten/kota ke provinsi induk | `kab[].p` + `provKab` |
+| Stable ADM2 key | unique geoBoundaries `shapeID` | `kab[].c` |
 | Geometry metadata | bbox, centroid, luas sel | included per region |
 
 Interaksi demo:
@@ -80,7 +82,9 @@ Interaksi demo:
 - hover untuk tooltip;
 - klik provinsi untuk zoom ke kabupaten/kota;
 - pan dengan drag;
-- zoom dengan scroll atau tombol;
+- zoom dengan scroll, pinch, tombol, atau keyboard;
+- cari provinsi maupun kabupaten/kota lewat input wilayah;
+- export tampilan PNG atau data wilayah JSON;
 - tekan `Esc` untuk kembali bertahap.
 
 ## Quick Start
@@ -90,6 +94,7 @@ Gunakan versi browser:
 ```html
 <script src="./data/peta-hd-data.js"></script>
 <script>
+  // peta-hd-data.js harus dimuat lebih dulu karena menetapkan window.PETA_HD.
   const mapData = window.PETA_HD;
   console.log(mapData.prov.length); // 38
   console.log(mapData.kab.length);  // 519
@@ -146,6 +151,7 @@ run-length encoding.
 
   "kab": [
     {
+      "c": "22746128B65593111718524",
       "n": "Semarang",
       "t": "Kota",
       "p": 13,
@@ -159,9 +165,7 @@ run-length encoding.
     }
   ],
 
-  "provKab": {
-    "13": [120, 121, 122]
-  },
+  "provKab": [[0, 1], [2, 3], [120, 121, 122]],
 
   "provRle": [255, 8000, 0, 12],
   "kabRle": [65535, 8000, 12, 4]
@@ -172,7 +176,8 @@ Field penting:
 
 - `W`, `H`: ukuran grid pixel.
 - `prov[]`: daftar provinsi. Index array adalah ID provinsi.
-- `kab[]`: daftar kabupaten/kota. `p` menunjuk ke index provinsi di `prov[]`.
+- `kab[]`: daftar kabupaten/kota. `c` adalah kode unik ADM2 dan `p` menunjuk ke
+  index provinsi di `prov[]`.
 - `provKab`: lookup cepat dari provinsi ke daftar kabupaten/kota.
 - `provRle`: grid provinsi. `255` berarti laut.
 - `kabRle`: grid kabupaten/kota. `65535` berarti laut.
@@ -233,6 +238,32 @@ Untuk data komunitas, simpan angka agregat di `prov[].m` atau mapping eksternal
 berdasarkan nama/kode wilayah, lalu bucket-kan ke ramp warna. Peta ini tidak
 mengharuskan kamu memakai skema data aiclub.id.
 
+## Recipe: Warnai Peta Dengan Data Sendiri
+
+Atur hook sebelum data dan script demo dimuat. Provinsi dapat dipetakan dengan
+nama; ADM2 sebaiknya memakai kode `kab[].c` agar nama yang sama tidak tertukar.
+
+```html
+<script>
+  window.PETA_HD_MERGE = {
+    prov: {
+      "DKI Jakarta": 120,
+      "Jawa Barat": 95,
+      "Bali": 18
+    },
+    kab: {
+      "22746128B65593111718524": 42
+    }
+  };
+
+  // Tepat lima warna heksadesimal, dari nilai terendah ke tertinggi.
+  window.PETA_COLORS = ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"];
+</script>
+<script src="./data/peta-hd-data.js"></script>
+```
+
+Demo membaca kedua hook saat boot. Nilai yang tidak ditemukan tetap `0`.
+
 ## Keywords
 
 Natural search phrases this project is built around:
@@ -267,8 +298,17 @@ Cukup `grid[y * W + x]`.
 
 ```txt
 peta-pixel-nusantara/
+├─ .gitignore
+├─ AGENTS.md
+├─ ATTRIBUTION.md
+├─ CITATION.cff
+├─ CLAUDE.md
+├─ CONTRIBUTING.md
+├─ LICENSE
+├─ README.md
 ├─ index.html
 ├─ assets/
+│  ├─ favicon.svg
 │  └─ preview.png
 ├─ data/
 │  ├─ peta-hd-data.js
@@ -278,10 +318,8 @@ peta-pixel-nusantara/
 │  ├─ geoBoundaries-IDN-ADM2_simplified.geojson
 │  └─ indonesia-topojson-city-regency.json
 ├─ tools/
-│  └─ rasterize.mjs
-├─ ATTRIBUTION.md
-├─ LICENSE
-└─ README.md
+│  ├─ rasterize.mjs
+│  └─ verify-data.mjs
 ```
 
 ## Data Sources

@@ -41,8 +41,9 @@ git diff --check
 For preview changes:
 
 ```bash
+# Jalankan `python3 -m http.server 8080` di terminal lain.
 npx --yes playwright screenshot --viewport-size=1092,572 \
-  "file:///home/ramaaditya/Project/peta-pixel-nusantara/index.html" \
+  "http://127.0.0.1:8080/index.html" \
   assets/preview.png
 ```
 
