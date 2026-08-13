@@ -1,6 +1,6 @@
 # Peta Pixel Nusantara - Peta Indonesia 8bit
 
-**Peta Indonesia 8bit** yang bisa di-zoom dari 38 provinsi ke 519
+**Peta Indonesia 8bit** yang bisa di-zoom dari 38 provinsi ke 514
 kabupaten/kota. Boundary asli Indonesia dirasterisasi menjadi grid pixel, lalu
 dirender dengan canvas nearest-neighbor supaya tetap tajam, ringan, dan mudah
 dipakai ulang di web, mobile, game engine, atau tool internal.
@@ -72,7 +72,8 @@ Tidak ada build step, framework, bundler, atau backend. Demo ada di
 | Layer | Coverage | Runtime format |
 | --- | --- | --- |
 | Province | 38 provinsi Indonesia | `prov[]` + `provRle` |
-| Regency / city | 519 ADM2 units from geoBoundaries | `kab[]` + `kabRle` |
+| Regency / city | 514 ADM2 units from geoBoundaries | `kab[]` + `kabRle` |
+| Water | danau & waduk besar (mis. Danau Toba) | `waterRle` |
 | Relationship | kabupaten/kota ke provinsi induk | `kab[].p` + `provKab` |
 | Stable ADM2 key | unique geoBoundaries `shapeID` | `kab[].c` |
 | Geometry metadata | bbox, centroid, luas sel | included per region |
@@ -83,7 +84,10 @@ Interaksi demo:
 - klik provinsi untuk zoom ke kabupaten/kota;
 - pan dengan drag;
 - zoom dengan scroll, pinch, tombol, atau keyboard;
-- cari provinsi maupun kabupaten/kota lewat input wilayah;
+- cari provinsi maupun kabupaten/kota lewat input wilayah, termasuk pencarian
+  sebagian ("jakarta", "dana") dan potongan `shapeID` dengan `Enter`;
+- jelajah dengan keyboard: `Tab` ke peta, panah untuk menggeser kursor sel
+  (tahan `Shift` untuk lompat jauh), `Enter`/spasi untuk membuka wilayah;
 - export tampilan PNG atau data wilayah JSON;
 - tekan `Esc` untuk kembali bertahap.
 
@@ -97,7 +101,7 @@ Gunakan versi browser:
   // peta-hd-data.js harus dimuat lebih dulu karena menetapkan window.PETA_HD.
   const mapData = window.PETA_HD;
   console.log(mapData.prov.length); // 38
-  console.log(mapData.kab.length);  // 519
+  console.log(mapData.kab.length);  // 514
 </script>
 ```
 
@@ -168,7 +172,8 @@ run-length encoding.
   "provKab": [[0, 1], [2, 3], [120, 121, 122]],
 
   "provRle": [255, 8000, 0, 12],
-  "kabRle": [65535, 8000, 12, 4]
+  "kabRle": [65535, 8000, 12, 4],
+  "waterRle": [0, 9500, 1, 6]
 }
 ```
 
@@ -181,6 +186,8 @@ Field penting:
 - `provKab`: lookup cepat dari provinsi ke daftar kabupaten/kota.
 - `provRle`: grid provinsi. `255` berarti laut.
 - `kabRle`: grid kabupaten/kota. `65535` berarti laut.
+- `waterRle`: grid biner perairan darat. `1` berarti danau/waduk, `0` selain
+  itu. Render di atas layer provinsi supaya danau tidak tampak sebagai daratan.
 - `m`: metrik contoh untuk pewarnaan. Isi dengan data kamu sendiri, misalnya
   member, venue, event, atau populasi.
 
@@ -319,6 +326,7 @@ peta-pixel-nusantara/
 │  └─ indonesia-topojson-city-regency.json
 ├─ tools/
 │  ├─ rasterize.mjs
+│  ├─ non-admin-units.mjs
 │  └─ verify-data.mjs
 ```
 
@@ -330,8 +338,12 @@ Please keep attribution when using or redistributing derived data from this repo
   [denyherianto/indonesia-geojson-topojson-maps-with-38-provinces][prov-src],
   covering 38 provinces under CC-BY-4.0.
 - Regency / city boundaries:
-  [geoBoundaries][geoboundaries], covering 519 Indonesia ADM2 units under
-  CC-BY-4.0.
+  [geoBoundaries][geoboundaries], covering 514 Indonesia ADM2 units under
+  CC-BY-4.0. The source file ships 519 features: five of them are physical
+  features tagged `shapeType=ADM2` (Danau Toba, Danau, Waduk Cirata, "Wadung
+  Kedungombo", Hutan). The rasterizer moves the four water bodies into
+  `waterRle` and drops the forest, so only real administrative units land in
+  `kab[]`.
 - Legacy fallback ADM2 source:
   [tvalentius/Indonesia-topojson][kab-src], covering 388 GADM-derived
   regencies/cities. The rasterizer only uses this when the geoBoundaries file is
@@ -348,7 +360,7 @@ See [ATTRIBUTION.md](ATTRIBUTION.md) for details.
 ## Current Limitations
 
 The bundled kabupaten/kota layer now uses geoBoundaries ADM2 and contains
-519 units. That is more complete than the older GADM-derived fallback, but names
+514 units. That is more complete than the older GADM-derived fallback, but names
 and official codes may still need normalization before use in government-grade
 systems.
 

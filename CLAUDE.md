@@ -5,7 +5,7 @@ Quick context for Claude and other coding agents.
 ## What This Repo Is
 
 Peta Pixel Nusantara is an open-source **peta Indonesia 8bit**: an interactive
-pixel map of Indonesia with 38 provinces and 519 ADM2 units. The demo is
+pixel map of Indonesia with 38 provinces and 514 ADM2 units. The demo is
 vanilla HTML/Canvas. The runtime data is generated from boundary sources into
 RLE-compressed grids.
 
@@ -15,6 +15,7 @@ Read `AGENTS.md` for the full operating rules.
 
 - `index.html` - interactive demo and renderer.
 - `tools/rasterize.mjs` - source boundaries to generated data.
+- `tools/non-admin-units.mjs` - the lakes/forest the ADM2 source mislabels.
 - `tools/verify-data.mjs` - coverage and consistency checks.
 - `data/peta-hd-data.js` - generated browser data (`window.PETA_HD`).
 - `data/peta-hd-data.json` - generated JSON data.
