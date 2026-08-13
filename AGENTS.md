@@ -12,6 +12,7 @@ Indonesia**. It contains:
   `data/peta-hd-data.json`;
 - source boundaries in `sources/`;
 - a rasterizer in `tools/rasterize.mjs`;
+- the non-administrative feature filter in `tools/non-admin-units.mjs`;
 - a data verifier in `tools/verify-data.mjs`.
 
 The public positioning matters. Keep copy natural, but preserve the core search
@@ -27,8 +28,14 @@ phrases: `peta indonesia 8bit`, `peta pixel indonesia`, `indonesia 8-bit map`,
 - `data/peta-hd-data.js` and `data/peta-hd-data.json` are generated files.
 - Do not manually edit generated data. Change sources or the rasterizer, then
   run `node tools/rasterize.mjs`.
-- Generated data must include 38 provinces and at least 514 ADM2 units.
-  Current expected output is 519 ADM2 units with 98 cities.
+- Generated data must include 38 provinces and exactly 514 ADM2 units
+  (416 Kabupaten + 98 Kota).
+- The geoBoundaries file ships 519 features; five are physical features tagged
+  `shapeType=ADM2`. `tools/non-admin-units.mjs` is the single list both the
+  rasterizer and the verifier use — extend it there, never inline.
+- The four water bodies are rasterized into `waterRle`, a binary grid on the
+  same bounds; the demo paints it over the province layer and `pick()` treats
+  water as "not a region".
 
 ## Required Verification
 

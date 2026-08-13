@@ -17,6 +17,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { isNonAdmin, isWater } from './non-admin-units.mjs';
 
 try {
 const DIR = dirname(fileURLToPath(import.meta.url));
@@ -84,14 +85,18 @@ let kabGeoms = (ADM2_SOURCE.endsWith('.geojson') ? decodeGeoJSON(readJSON(ADM2_S
     const rawName = g.props.shapeName || '';
     const isKota = /^Kota\s+/i.test(rawName) && !/^Kota\s+Baru$/i.test(rawName);
     const name = isKota ? rawName.replace(/^Kota\s+/i, '') : rawName;
-    return { code: g.props.shapeID || null, name, prov1: null, type: isKota ? 'Kota' : 'Kabupaten', junk: !name, polys: g.polys };
+    const code = g.props.shapeID || null;
+    return { code, name, prov1: null, type: isKota ? 'Kota' : 'Kabupaten', junk: !name || isNonAdmin(code, name), water: isWater(code, name), polys: g.polys };
   }
   const isKota = g.props.TYPE_2 === 'Kotamadya' || g.props.ENGTYPE_2 === 'Municipality';
   const junk = g.props.TYPE_2 === 'Unknown' || /^n\.a/i.test(g.props.NAME_2 || '');
   let name = g.props.NAME_2 || ''; if (isKota) name = name.replace(/^Kota\s+/i, '');
-  return { code: g.props.HASC_2 || null, name, prov1: g.props.NAME_1, type: isKota ? 'Kota' : 'Kabupaten', junk, polys: g.polys };
+  return { code: g.props.HASC_2 || null, name, prov1: g.props.NAME_1, type: isKota ? 'Kota' : 'Kabupaten', junk, water: false, polys: g.polys };
 });
-kabGeoms = kabGeoms.filter(k => !k.junk);
+// Danau/waduk yang salah ditandai ADM2 dipindah ke layer air; sisanya (mis. "Hutan") dibuang.
+const waterGeoms = kabGeoms.filter(k => k.water);
+const dropped = kabGeoms.filter(k => k.junk && !k.water);
+kabGeoms = kabGeoms.filter(k => !k.junk && !k.water);
 
 const provNames = provGeoms.map(g => g.name);
 const nameIdx = {}; provNames.forEach((n, i) => nameIdx[n] = i);
@@ -101,7 +106,7 @@ let lonMin = Infinity, lonMax = -Infinity, latMin = Infinity, latMax = -Infinity
 const scan = gs => gs.forEach(g => g.polys.forEach(rr => rr.forEach(r => r.forEach(([lo, la]) => {
   if (lo < lonMin) lonMin = lo; if (lo > lonMax) lonMax = lo; if (la < latMin) latMin = la; if (la > latMax) latMax = la;
 }))));
-scan(provGeoms); scan(kabGeoms);
+scan(provGeoms); scan(kabGeoms); scan(waterGeoms);
 if (![lonMin, lonMax, latMin, latMax].every(Number.isFinite) || lonMax <= lonMin || latMax <= latMin) {
   throw new Error('empty or invalid geometry bounds');
 }
@@ -134,6 +139,9 @@ function raster(geoms, grid, SEA) {
 }
 const PG = new Uint8Array(W * H).fill(SEA8); raster(provGeoms, PG, SEA8);
 const KG = new Uint16Array(W * H).fill(SEA16); raster(kabGeoms, KG, SEA16);
+// layer air: biner (1 = danau/waduk), pakai grid & bounds yang sama.
+const WGi = new Uint8Array(W * H).fill(SEA8); raster(waterGeoms, WGi, SEA8);
+const WG = WGi.map(v => (v === SEA8 ? 0 : 1));
 
 // ---- kab -> province: majority vote over PG, fallback GADM NAME_1 ----
 const NAME1 = { 'Aceh': 'Aceh', 'Bali': 'Bali', 'Bangka-Belitung': 'Kepulauan Bangka Belitung', 'Banten': 'Banten', 'Bengkulu': 'Bengkulu', 'Gorontalo': 'Gorontalo', 'Irian Jaya Barat': 'Papua Barat', 'Papua Barat': 'Papua Barat', 'Jakarta Raya': 'DKI Jakarta', 'Jambi': 'Jambi', 'Jawa Barat': 'Jawa Barat', 'Jawa Tengah': 'Jawa Tengah', 'Jawa Timur': 'Jawa Timur', 'Kalimantan Barat': 'Kalimantan Barat', 'Kalimantan Selatan': 'Kalimantan Selatan', 'Kalimantan Tengah': 'Kalimantan Tengah', 'Kalimantan Timur': 'Kalimantan Timur', 'Kalimantan Utara': 'Kalimantan Utara', 'Kepulauan Riau': 'Kepulauan Riau', 'Lampung': 'Lampung', 'Maluku': 'Maluku', 'Maluku Utara': 'Maluku Utara', 'Nusa Tenggara Barat': 'Nusa Tenggara Barat', 'Nusa Tenggara Timur': 'Nusa Tenggara Timur', 'Papua': 'Papua', 'Riau': 'Riau', 'Sulawesi Barat': 'Sulawesi Barat', 'Sulawesi Selatan': 'Sulawesi Selatan', 'Sulawesi Tengah': 'Sulawesi Tengah', 'Sulawesi Tenggara': 'Sulawesi Tenggara', 'Sulawesi Utara': 'Sulawesi Utara', 'Sumatera Barat': 'Sumatera Barat', 'Sumatera Selatan': 'Sumatera Selatan', 'Sumatera Utara': 'Sumatera Utara', 'Yogyakarta': 'Daerah Istimewa Yogyakarta' };
@@ -168,7 +176,7 @@ const provKab = Array.from({ length: prov.length }, () => []); kab.forEach((k, i
 
 // ---- RLE ----
 const rle = a => { const r = []; let c = a[0], n = 1; for (let i = 1; i < a.length; i++) { if (a[i] === c) n++; else { r.push(c, n); c = a[i]; n = 1; } } r.push(c, n); return r; };
-const payload = { W, H, lonMin, lonMax, latMin, latMax, prov, kab, provKab, provRle: rle(PG), kabRle: rle(KG) };
+const payload = { W, H, lonMin, lonMax, latMin, latMax, prov, kab, provKab, provRle: rle(PG), kabRle: rle(KG), waterRle: rle(WG) };
 const json = JSON.stringify(payload);
 
 mkdirSync(join(ROOT, 'data'), { recursive: true });
@@ -177,6 +185,7 @@ writeFileSync(join(ROOT, 'data/peta-hd-data.json'), json);
 
 const kota = kab.filter(k => k.t === 'Kota').length;
 console.log(`grid ${W}x${H} · ${prov.length} provinsi · ${kab.length} kab/kota (${kota} Kota + ${kab.length - kota} Kabupaten)`);
+console.log(`layer air: ${waterGeoms.length} objek (${waterGeoms.map(g => g.name).join(', ') || '—'})` + (dropped.length ? ` · dibuang: ${dropped.map(g => g.name).join(', ')}` : ''));
 console.log(`ditulis: data/peta-hd-data.js (${Math.round(json.length / 1024)} KB) + .json`);
 console.log('catatan: prov[].m = 0 — ikat metrik Anda sendiri untuk pewarnaan kepadatan.');
 } catch (error) {

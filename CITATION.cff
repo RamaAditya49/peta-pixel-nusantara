@@ -9,7 +9,7 @@ repository-code: "https://github.com/RamaAditya49/peta-pixel-nusantara"
 url: "https://github.com/RamaAditya49/peta-pixel-nusantara"
 abstract: >-
   An open-source peta Indonesia 8bit and pixel map of Indonesia with 38
-  provinces and 519 ADM2 units, generated from boundary data into
+  provinces and 514 ADM2 units, generated from boundary data into
   RLE-compressed pixel grids for interactive rendering.
 keywords:
   - peta indonesia 8bit

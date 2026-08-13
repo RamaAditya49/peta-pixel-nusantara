@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Peta Indonesia 8bit interaktif dengan 38 provinsi dan 519 kabupaten/kota, dibuat sebagai 8-bit map of Indonesia yang ringan dan terbuka.">
+<meta name="description" content="Peta Indonesia 8bit interaktif dengan 38 provinsi dan 514 kabupaten/kota, dibuat sebagai 8-bit map of Indonesia yang ringan dan terbuka.">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'">
 <title>Peta Pixel Nusantara — demo</title>
 <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
@@ -40,6 +40,7 @@
   .search{ width:172px; min-height:38px; border:2px solid var(--line); background:#0B1120; color:var(--ink); padding:6px 8px; font-family:'VT323',monospace; font-size:17px; }
   .loadstatus{ position:absolute; inset:0; z-index:8; display:flex; align-items:center; justify-content:center; background:var(--panel); color:var(--mut); font-size:22px; }
   .export{ display:flex; gap:6px; }
+  .sr{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
   @keyframes blink{ 0%,49%{opacity:1} 50%,100%{opacity:0} }
 </style>
 </head>
@@ -68,7 +69,9 @@
     <!-- stage + panel -->
     <div class="stagewrap">
       <div class="stage" id="stage">
-        <canvas class="map" id="cv" width="1600" height="594" role="img" aria-label="Peta pixel Indonesia interaktif dengan 38 provinsi dan 519 kabupaten/kota" tabindex="0"></canvas>
+        <canvas class="map" id="cv" width="1600" height="594" role="img" aria-label="Peta pixel Indonesia interaktif dengan 38 provinsi dan 514 kabupaten/kota" tabindex="0" aria-describedby="kbdHelp"></canvas>
+        <p class="sr" id="kbdHelp">Gunakan tombol panah untuk menggeser kursor peta, Enter atau spasi untuk membuka wilayah, dan Escape untuk kembali.</p>
+        <p class="sr" id="live" role="status" aria-live="polite"></p>
         <div class="loadstatus vt" id="loadStatus" role="status">MEMUAT PETA…</div>
         <div class="tip" id="tip"></div>
         <div class="legend">
@@ -82,7 +85,7 @@
           <button class="zbtn" id="zout" aria-label="Perkecil peta">−</button>
           <button class="zbtn" id="zreset" aria-label="Kembali ke seluruh Indonesia" style="color:#8CA2C8; font-size:9px" onmouseover="this.style.borderColor='#FFE500';this.style.color='#FFE500'" onmouseout="this.style.borderColor='#1D2C4C';this.style.color='#8CA2C8'">⟲</button>
         </div>
-        <div class="hint" id="hint">geser untuk pan · scroll zoom<br>klik provinsi untuk kabupaten</div>
+        <div class="hint" id="hint">geser / panah: jelajah · scroll zoom<br>klik / enter: buka provinsi</div>
       </div>
       <div class="panel" id="panel"></div>
     </div>
@@ -100,7 +103,7 @@
 (function(){
   var DEFAULT_RAMP = ["#131C33","#0E3C50","#0E607A","#00A7C4","#00E5FF"];
   var RAMP = Array.isArray(window.PETA_COLORS) && window.PETA_COLORS.length===5 && window.PETA_COLORS.every(function(c){ return /^#[0-9a-f]{6}$/i.test(c); }) ? window.PETA_COLORS.slice() : DEFAULT_RAMP;
-  var SEA8=255, SEA16=65535;
+  var SEA8=255, SEA16=65535, WATER='#1B4B7A';
   var hex = function(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; };
   var esc = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
   var fmt = function(n){ return (n||0).toLocaleString('id-ID'); };
@@ -119,13 +122,17 @@
     // inflate grids
     function inflate(rle, Ctor){ var g=new Ctor(W*H), o=0; for(var i=0;i<rle.length;i+=2){ var v=rle[i],c=rle[i+1]; for(var j=0;j<c;j++) g[o++]=v; } return g; }
     var PG=inflate(D.provRle, Uint8Array), KG=inflate(D.kabRle, Uint16Array);
+    var WG=D.waterRle?inflate(D.waterRle, Uint8Array):null;
     // legend
     var lr=document.getElementById('legendRow');
     ['0','1','50','150','400+'].forEach(function(lab,i){ var d=document.createElement('div'); d.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px'; d.innerHTML='<div style="width:22px;height:14px;background:'+RAMP[i]+'"></div><span class="vt" style="font-size:13px;color:#8CA2C8">'+lab+'</span>'; lr.appendChild(d); });
     // base province canvas
-    var rgb=RAMP.map(hex);
+    var rgb=RAMP.map(hex), wrgb=hex(WATER);
     var baseCv=document.createElement('canvas'); baseCv.width=W; baseCv.height=H;
-    (function(){ var ctx=baseCv.getContext('2d'), img=ctx.createImageData(W,H), d=img.data; for(var i=0;i<PG.length;i++){ var v=PG[i], q=i*4; if(v===SEA8){ d[q+3]=0; } else { var c=rgb[bProv(D.prov[v].m)]; d[q]=c[0];d[q+1]=c[1];d[q+2]=c[2];d[q+3]=255; } } ctx.putImageData(img,0,0); })();
+    (function(){ var ctx=baseCv.getContext('2d'), img=ctx.createImageData(W,H), d=img.data; for(var i=0;i<PG.length;i++){ var v=PG[i], q=i*4;
+      if(WG&&WG[i]){ d[q]=wrgb[0];d[q+1]=wrgb[1];d[q+2]=wrgb[2];d[q+3]=255; }   // danau/waduk di atas daratan
+      else if(v===SEA8){ d[q+3]=0; }
+      else { var c=rgb[bProv(D.prov[v].m)]; d[q]=c[0];d[q+1]=c[1];d[q+2]=c[2];d[q+3]=255; } } ctx.putImageData(img,0,0); })();
     var provKabCv=document.createElement('canvas'); provKabCv.width=W; provKabCv.height=H;
     var hiCv=document.createElement('canvas'); hiCv.width=W; hiCv.height=H;
     var pickCv=document.createElement('canvas'); pickCv.width=W; pickCv.height=H;
@@ -164,11 +171,20 @@
       }
       if(hover){ var active = S.level==='prov' ? (hover.type==='kab'&&hover.idx!==S.selKab) : (hover.type==='prov');
         if(active){ var key=hover.type+hover.idx; if(hiKey!==key){ buildHi(hover); hiKey=key; } ctx.drawImage(hiCv, view.vx,view.vy,view.vw,view.vh, 0,0,dw,dh); } }
+      if(kbdOn&&kbd&&document.activeElement===cv){ var cs=Math.max(12,dw/view.vw), kx=(kbd.x+0.5-view.vx)/view.vw*dw, ky=(kbd.y+0.5-view.vy)/view.vh*dh;
+        ctx.lineWidth=4; ctx.strokeStyle='#070B14'; ctx.strokeRect(kx-cs/2,ky-cs/2,cs,cs);
+        ctx.lineWidth=2; ctx.strokeStyle='#FFE500'; ctx.strokeRect(kx-cs/2,ky-cs/2,cs,cs); }
     }
     function redraw(){ if(!redraw._r)redraw._r=requestAnimationFrame(function(){ redraw._r=0; draw(); }); }
     function clamp(){ var v=view; v.vw=Math.max(40,Math.min(W,v.vw)); v.vh=v.vw*aspect; if(v.vh>H){ v.vh=H; v.vw=v.vh/aspect; } v.vx=Math.max(0,Math.min(W-v.vw,v.vx)); v.vy=Math.max(0,Math.min(H-v.vh,v.vy)); }
-    function anim(t){ if(anim._r)cancelAnimationFrame(anim._r); var f={vx:view.vx,vy:view.vy,vw:view.vw,vh:view.vh}, t0=performance.now(),dur=440;
-      (function step(){ var p=Math.min(1,(performance.now()-t0)/dur), e=1-Math.pow(1-p,3); view={vx:f.vx+(t.vx-f.vx)*e,vy:f.vy+(t.vy-f.vy)*e,vw:f.vw+(t.vw-f.vw)*e,vh:f.vh+(t.vh-f.vh)*e}; draw(); if(p<1)anim._r=requestAnimationFrame(step); })(); }
+    // Setiap interaksi (pan/zoom/keyboard) wajib membatalkan rAF animasi; kalau tidak,
+    // step berikutnya menimpa `view` yang baru saja digeser pengguna.
+    function stopAnim(){ if(anim._r){ cancelAnimationFrame(anim._r); anim._r=0; } }
+    function anim(t){ stopAnim(); kbd=null;   // viewport melompat, kursor keyboard di-seed ulang
+      var f={vx:view.vx,vy:view.vy,vw:view.vw,vh:view.vh}, t0=performance.now(),dur=440;
+      (function step(){ var p=Math.min(1,(performance.now()-t0)/dur), e=1-Math.pow(1-p,3); view={vx:f.vx+(t.vx-f.vx)*e,vy:f.vy+(t.vy-f.vy)*e,vw:f.vw+(t.vw-f.vw)*e,vh:f.vh+(t.vh-f.vh)*e}; draw();
+        anim._r = p<1 ? requestAnimationFrame(step) : (animDone(),0); })(); }
+    function animDone(){ if(kbdOn&&document.activeElement===cv){ kbdCell(); kbdSync(); } }
     function viewFor(bb,pad){ var cx=(bb.x0+bb.x1)/2+0.5, cy=(bb.y0+bb.y1)/2+0.5; var vw=Math.max((bb.x1-bb.x0+1)*pad,(bb.y1-bb.y0+1)*pad/aspect,46); vw=Math.min(vw,W); var vh=vw*aspect; if(vh>H){vh=H;vw=vh/aspect;} var vx=Math.max(0,Math.min(W-vw,cx-vw/2)), vy=Math.max(0,Math.min(H-vh,cy-vh/2)); return {vx:vx,vy:vy,vw:vw,vh:vh}; }
 
     // ---- chrome / panel ----
@@ -183,7 +199,7 @@
       backBtn.style.display = S.level==='prov' ? 'block':'none';
       backBtn.textContent = S.selKab!=null ? '[ESC] KEMBALI KE PROVINSI' : '[ESC] SELURUH INDONESIA';
       legendLabel.textContent = S.level==='prov' ? 'KAB/KOTA (outline)' : 'NILAI CONTOH / PROVINSI';
-      hintEl.innerHTML = S.level==='prov' ? 'hover kab/kota · scroll zoom<br>klik untuk detail' : 'geser untuk pan · scroll zoom<br>klik provinsi untuk kabupaten';
+      hintEl.innerHTML = S.level==='prov' ? 'hover / panah: kab-kota · scroll zoom<br>klik / enter: detail' : 'geser / panah: jelajah · scroll zoom<br>klik / enter: buka provinsi';
     }
     function renderPanel(){
       if(S.selKab!=null){ var k=D.kab[S.selKab], p=D.prov[k.p];
@@ -224,31 +240,68 @@
     // ---- interaction ----
     function toBase(e){ var r=cv.getBoundingClientRect(); if(!r.width||!r.height||!cv.width||!cv.height)return null; var mx=(e.clientX-r.left)/r.width*cv.width, my=(e.clientY-r.top)/r.height*cv.height; return {bx:view.vx+mx/cv.width*view.vw, by:view.vy+my/cv.height*view.vh, mx:mx, my:my}; }
     function pick(bx,by){ var x=Math.floor(bx),y=Math.floor(by); if(x<0||y<0||x>=W||y>=H)return null; var o=y*W+x;
+      if(WG&&WG[o])return null;   // danau/waduk bukan wilayah administratif
       if(S.level==='prov'){ var kv=KG[o]; if(kv===SEA16||D.kab[kv].p!==S.selProv)return null; return {type:'kab',idx:kv}; }
       var pv=PG[o]; if(pv===SEA8)return null; return {type:'prov',idx:pv}; }
     var tip=document.getElementById('tip');
+    // dipakai pointer maupun kursor keyboard; mx/my dalam koordinat canvas.
+    function showTip(hit,mx,my){ if(!hit){ tip.style.display='none'; return; }
+      var r=cv.getBoundingClientRect(), nm,val,col='#00E5FF';
+      if(hit.type==='prov'){ var p=D.prov[hit.idx]; nm=p.n.toUpperCase(); val=fmt(p.m); }
+      else { var k=D.kab[hit.idx]; nm=(k.t==='Kota'?'KOTA ':'KAB. ')+k.n.toUpperCase(); val=fmt(k.a)+' sel'; }
+      tip.style.display='flex';
+      tip.innerHTML='<div style="background:#070B14;border:2px solid #00E5FF;padding:6px 10px;display:flex;flex-direction:column;gap:1px;align-items:center"><span class="pixel" style="font-size:7px;color:#8CA2C8;white-space:nowrap">'+esc(nm)+'</span><span class="vt" style="font-size:22px;line-height:1;color:'+col+'">'+esc(val)+'</span></div><div style="width:7px;height:7px;background:#00E5FF;margin-top:-4px;transform:rotate(45deg)"></div>';
+      tip.style.left=Math.max(tip.offsetWidth/2,Math.min(r.width-tip.offsetWidth/2,mx/cv.width*r.width))+'px'; tip.style.top=Math.max(tip.offsetHeight*1.15,my/cv.height*r.height)+'px';
+    }
     cv.addEventListener('mousemove', function(e){ if(drag){ panMove(e); return; }
       var b=toBase(e); if(!b)return; var hit=pick(b.bx,b.by), same=(hit&&hover)&&hit.type===hover.type&&hit.idx===hover.idx;
       if(!same){ hover=hit; redraw(); }
-      if(!hit){ tip.style.display='none'; return; }
-      var r=cv.getBoundingClientRect(), nm,val,col;
-      if(hit.type==='prov'){ var p=D.prov[hit.idx]; nm=p.n.toUpperCase(); val=fmt(p.m); col='#00E5FF'; }
-      else { var k=D.kab[hit.idx]; nm=(k.t==='Kota'?'KOTA ':'KAB. ')+k.n.toUpperCase(); val=fmt(k.a)+' sel'; col='#00E5FF'; }
-      tip.style.display='flex';
-      tip.innerHTML='<div style="background:#070B14;border:2px solid #00E5FF;padding:6px 10px;display:flex;flex-direction:column;gap:1px;align-items:center"><span class="pixel" style="font-size:7px;color:#8CA2C8;white-space:nowrap">'+esc(nm)+'</span><span class="vt" style="font-size:22px;line-height:1;color:'+col+'">'+esc(val)+'</span></div><div style="width:7px;height:7px;background:#00E5FF;margin-top:-4px;transform:rotate(45deg)"></div>';
-      tip.style.left=Math.max(tip.offsetWidth/2,Math.min(r.width-tip.offsetWidth/2,b.mx/cv.width*r.width))+'px'; tip.style.top=Math.max(tip.offsetHeight*1.15,b.my/cv.height*r.height)+'px';
+      showTip(hit,b.mx,b.my);
     });
     cv.addEventListener('mouseleave', function(){ hover=null; tip.style.display='none'; redraw(); });
     cv.addEventListener('wheel', function(e){ e.preventDefault(); var b=toBase(e); if(!b)return; var f=e.deltaY<0?0.82:1.22; zoomAt(b.bx,b.by,b.mx/cv.width,b.my/cv.height,f); }, {passive:false});
-    cv.addEventListener('pointerdown', function(e){ pointers[e.pointerId]={x:e.clientX,y:e.clientY}; if(Object.keys(pointers).length===1)drag={x:e.clientX,y:e.clientY,moved:0,view:{vx:view.vx,vy:view.vy,vw:view.vw,vh:view.vh}}; else { drag=null; pinchActive=true; pinchDist=null; } try{cv.setPointerCapture(e.pointerId);}catch(_){}});
+    cv.addEventListener('pointerdown', function(e){ kbdOn=false; pointers[e.pointerId]={x:e.clientX,y:e.clientY}; if(Object.keys(pointers).length===1)drag={x:e.clientX,y:e.clientY,moved:0,view:{vx:view.vx,vy:view.vy,vw:view.vw,vh:view.vh}}; else { drag=null; pinchActive=true; pinchDist=null; } try{cv.setPointerCapture(e.pointerId);}catch(_){}});
     cv.addEventListener('pointermove', function(e){ if(!pointers[e.pointerId])return; pointers[e.pointerId]={x:e.clientX,y:e.clientY}; var ids=Object.keys(pointers);
       if(ids.length===2){ var a=pointers[ids[0]], b=pointers[ids[1]], dx=a.x-b.x, dy=a.y-b.y, dist=Math.hypot(dx,dy), mid=toBase({clientX:(a.x+b.x)/2,clientY:(a.y+b.y)/2}); if(pinchDist&&dist&&mid)zoomAt(mid.bx,mid.by,mid.mx/cv.width,mid.my/cv.height,pinchDist/dist); pinchDist=dist; }
       else if(e.pointerType!=='mouse'&&drag)panMove(e);
     });
     cv.addEventListener('pointerup', function(e){ var dg=drag, wasPinch=pinchActive; delete pointers[e.pointerId]; if(Object.keys(pointers).length<2)pinchDist=null; if(!Object.keys(pointers).length)pinchActive=false; drag=null; if(!wasPinch&&dg&&dg.moved<5){ var b=toBase(e); if(!b)return; var hit=pick(b.bx,b.by); if(hit){ if(hit.type==='prov')selectProv(hit.idx); else selectKab(hit.idx); } else if(panel.style.display==='flex')back(); } });
     cv.addEventListener('pointercancel', function(){ pointers={}; pinchDist=null; pinchActive=false; drag=null; });
-    function panMove(e){ drag.moved=Math.max(drag.moved,Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)); var r=cv.getBoundingClientRect(); if(!r.width||!r.height)return; view.vx=drag.view.vx-(e.clientX-drag.x)/r.width*view.vw; view.vy=drag.view.vy-(e.clientY-drag.y)/r.height*view.vh; clamp(); redraw(); }
-    function zoomAt(bx,by,fx,fy,f){ view.vw*=f; view.vh=view.vw*aspect; view.vx=bx-fx*view.vw; view.vy=by-fy*view.vh; clamp(); redraw(); }
+    function panMove(e){ stopAnim(); drag.moved=Math.max(drag.moved,Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)); var r=cv.getBoundingClientRect(); if(!r.width||!r.height)return; view.vx=drag.view.vx-(e.clientX-drag.x)/r.width*view.vw; view.vy=drag.view.vy-(e.clientY-drag.y)/r.height*view.vh; clamp(); redraw(); }
+    function zoomAt(bx,by,fx,fy,f){ stopAnim(); view.vw*=f; view.vh=view.vw*aspect; view.vx=bx-fx*view.vw; view.vy=by-fy*view.vh; clamp(); redraw(); }
+
+    // ---- keyboard: kursor sel di atas peta, pakai jalur hover/pick yang sama ----
+    var live=document.getElementById('live'), kbd=null, kbdOn=false, STEP={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+    function labelAt(hit){ if(!hit)return 'Laut atau perairan';
+      if(hit.type==='prov')return 'Provinsi '+D.prov[hit.idx].n;
+      var k=D.kab[hit.idx]; return (k.t==='Kota'?'Kota ':'Kabupaten ')+k.n+', '+D.prov[k.p].n; }
+    // mulai dari tengah viewport; kalau itu laut, lompat ke wilayah terdekat (cincin bertahap)
+    function kbdCell(){ if(kbd)return kbd;
+      var cx=Math.round(view.vx+view.vw/2), cy=Math.round(view.vy+view.vh/2), step=Math.max(1,Math.round(view.vw/48));
+      kbd={x:cx,y:cy}; if(pick(cx,cy))return kbd;
+      for(var r=1;r<=24;r++)for(var a=0,n=8*r;a<n;a++){ var t=a/n*Math.PI*2, x=Math.round(cx+Math.cos(t)*r*step), y=Math.round(cy+Math.sin(t)*r*step);
+        if(x<0||y<0||x>=W||y>=H)continue; if(pick(x,y)){ kbd={x:x,y:y}; return kbd; } }
+      return kbd; }
+    function kbdSync(){ hover=pick(kbd.x,kbd.y); redraw();
+      showTip(hover,(kbd.x+0.5-view.vx)/view.vw*cv.width,(kbd.y+0.5-view.vy)/view.vh*cv.height);
+      live.textContent=labelAt(hover); }
+    function kbdMove(dx,dy,fast){ var c=kbdCell(), step=Math.max(1,Math.round(view.vw/48))*(fast?8:1);
+      c.x=Math.max(0,Math.min(W-1,c.x+dx*step)); c.y=Math.max(0,Math.min(H-1,c.y+dy*step));
+      var mx=view.vw*0.08, my=view.vh*0.08;   // ikut geser kalau kursor menyentuh tepi
+      if(c.x<view.vx+mx)view.vx=c.x-mx; else if(c.x>view.vx+view.vw-mx)view.vx=c.x-view.vw+mx;
+      if(c.y<view.vy+my)view.vy=c.y-my; else if(c.y>view.vy+view.vh-my)view.vy=c.y-view.vh+my;
+      stopAnim(); clamp(); kbdSync(); }
+    cv.addEventListener('keydown', function(e){
+      if(STEP[e.key]){ e.preventDefault(); kbdOn=true; kbdMove(STEP[e.key][0],STEP[e.key][1],e.shiftKey); return; }
+      if(e.key!=='Enter'&&e.key!==' ')return;
+      e.preventDefault(); kbdOn=true; var hit=pick(kbdCell().x,kbdCell().y); if(!hit){ live.textContent='Tidak ada wilayah di kursor'; return; }
+      var text=labelAt(hit);
+      if(hit.type==='prov')selectProv(hit.idx); else selectKab(hit.idx);
+      live.textContent='Membuka '+text;
+    });
+    // fokus lewat klik tidak boleh memunculkan kursor keyboard — hanya :focus-visible
+    cv.addEventListener('focus', function(){ if(!cv.matches||!cv.matches(':focus-visible'))return; kbdOn=true; kbdCell(); kbdSync(); });
+    cv.addEventListener('blur', function(){ kbdOn=false; hover=null; tip.style.display='none'; redraw(); });
 
     function selectProv(pi){ hover=null; tip.style.display='none'; buildProvKab(pi); hiKey=null; S.level='prov'; S.selProv=pi; S.selKab=null; updateChrome(); renderPanel(); anim(viewFor(D.prov[pi],1.65)); }
     function selectKab(ki){ hover=null; tip.style.display='none'; S.selKab=ki; updateChrome(); renderPanel(); redraw(); }
@@ -258,11 +311,22 @@
     document.getElementById('zout').onclick=function(){ zoomAt(view.vx+view.vw/2,view.vy+view.vh/2,0.5,0.5,1.45); };
     document.getElementById('zreset').onclick=reset;
     document.getElementById('backBtn').onclick=back;
-    var search=document.getElementById('regionSearch'), options=document.getElementById('regionOptions'), targets={};
-    function addTarget(label,type,idx){ var option=document.createElement('option'); option.value=label; options.appendChild(option); targets[label]={type:type,idx:idx}; }
-    D.prov.forEach(function(p,i){ addTarget('Provinsi '+p.n,'prov',i); });
-    D.kab.forEach(function(k,i){ addTarget((k.t==='Kota'?'Kota ':'Kabupaten ')+k.n+' — '+D.prov[k.p].n,'kab',i); });
-    search.addEventListener('input',function(){ var target=targets[search.value]; if(!target)return; if(target.type==='prov')selectProv(target.idx); else { selectProv(D.kab[target.idx].p); selectKab(target.idx); } });
+    var search=document.getElementById('regionSearch'), options=document.getElementById('regionOptions'), targets={}, entries=[];
+    function addTarget(label,name,code,type,idx){ var option=document.createElement('option'); option.value=label; options.appendChild(option);
+      targets[label]={type:type,idx:idx}; entries.push({name:name.toLowerCase(),hay:(label+' '+(code||'')).toLowerCase(),type:type,idx:idx}); }
+    D.prov.forEach(function(p,i){ addTarget('Provinsi '+p.n,p.n,null,'prov',i); });
+    D.kab.forEach(function(k,i){ addTarget((k.t==='Kota'?'Kota ':'Kabupaten ')+k.n+' — '+D.prov[k.p].n,k.n,k.c,'kab',i); });
+    // label persis (pilihan datalist) → nama tanpa prefiks → substring nama/provinsi/shapeID
+    function resolve(q){ q=String(q||'').trim(); if(!q)return null; if(targets[q])return targets[q];
+      var s=q.toLowerCase(), i;
+      for(i=0;i<entries.length;i++) if(entries[i].name===s) return entries[i];
+      if(s.length<3)return null;
+      for(i=0;i<entries.length;i++) if(entries[i].hay.indexOf(s)>=0) return entries[i];
+      return null; }
+    function goTo(t){ if(!t)return false; if(t.type==='prov')selectProv(t.idx); else { selectProv(D.kab[t.idx].p); selectKab(t.idx); } return true; }
+    search.addEventListener('input',function(){ search.style.borderColor=''; goTo(targets[search.value]); });
+    search.addEventListener('keydown',function(e){ if(e.key!=='Enter')return; e.preventDefault();
+      if(goTo(resolve(search.value)))search.style.borderColor=''; else search.style.borderColor='var(--mag)'; });
     window.addEventListener('keydown', function(e){ if(e.key==='Escape'){ if(search.value){ search.value=''; search.blur(); } else back(); return; } if(e.target===search)return;
       if(e.key==='+'||e.key==='=')document.getElementById('zin').click(); else if(e.key==='-'||e.key==='_')document.getElementById('zout').click(); else if(e.key==='0')document.getElementById('zreset').click();
     });

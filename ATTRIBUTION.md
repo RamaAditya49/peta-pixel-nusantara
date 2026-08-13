@@ -49,7 +49,10 @@ Rasterizer hanya memakai fallback GADM bila file geoBoundaries tidak ada.
 
 ## Vintage & kelengkapan data
 
-- Rilis saat ini: geoBoundaries ADM2 simplified → **519 unit** (98 Kota + 421 Kabupaten).
+- Rilis saat ini: geoBoundaries ADM2 simplified → **514 unit** (98 Kota + 416 Kabupaten).
+- File sumber berisi 519 fitur; 5 di antaranya bukan wilayah administratif
+  (Danau Toba, Danau, Waduk Cirata, "Wadung Kedungombo", Hutan). Empat danau/waduk
+  dipindah ke layer air `waterRle`, sisanya dibuang oleh `tools/rasterize.mjs`.
 - Fallback lama: GADM-derived adm2 v2.8 → **388 unit** (88 Kota + 300 Kabupaten).
 - Untuk kebutuhan kode resmi: cocokkan nama ke data BPS/BIG, lalu regenerate.
   Pemetaan nama → kode wilayah resmi: [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah).
