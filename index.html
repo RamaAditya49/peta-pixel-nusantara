@@ -127,12 +127,15 @@
     var lr=document.getElementById('legendRow');
     ['0','1','50','150','400+'].forEach(function(lab,i){ var d=document.createElement('div'); d.style.cssText='display:flex;flex-direction:column;align-items:center;gap:4px'; d.innerHTML='<div style="width:22px;height:14px;background:'+RAMP[i]+'"></div><span class="vt" style="font-size:13px;color:#8CA2C8">'+lab+'</span>'; lr.appendChild(d); });
     // base province canvas
-    var rgb=RAMP.map(hex), wrgb=hex(WATER);
+    var packRgba = (function(){ var buf=new ArrayBuffer(4), u8=new Uint8Array(buf), u32=new Uint32Array(buf); return function(r,g,b,a){ u8[0]=r; u8[1]=g; u8[2]=b; u8[3]=a!==undefined?a:255; return u32[0]; }; })();
+    var rgba32 = RAMP.map(function(c){ var r=hex(c); return packRgba(r[0],r[1],r[2],255); });
+    var wrgba32 = (function(){ var wr=hex(WATER); return packRgba(wr[0],wr[1],wr[2],255); })();
+    var edgeProvKab32 = packRgba(7, 11, 20, 255);
     var baseCv=document.createElement('canvas'); baseCv.width=W; baseCv.height=H;
-    (function(){ var ctx=baseCv.getContext('2d'), img=ctx.createImageData(W,H), d=img.data; for(var i=0;i<PG.length;i++){ var v=PG[i], q=i*4;
-      if(WG&&WG[i]){ d[q]=wrgb[0];d[q+1]=wrgb[1];d[q+2]=wrgb[2];d[q+3]=255; }   // danau/waduk di atas daratan
-      else if(v===SEA8){ d[q+3]=0; }
-      else { var c=rgb[bProv(D.prov[v].m)]; d[q]=c[0];d[q+1]=c[1];d[q+2]=c[2];d[q+3]=255; } } ctx.putImageData(img,0,0); })();
+    (function(){ var ctx=baseCv.getContext('2d'), img=ctx.createImageData(W,H), d32=new Uint32Array(img.data.buffer); for(var i=0;i<PG.length;i++){ var v=PG[i];
+      if(WG&&WG[i]){ d32[i]=wrgba32; }   // danau/waduk di atas daratan
+      else if(v===SEA8){ d32[i]=0; }
+      else { d32[i]=rgba32[bProv(D.prov[v].m)]; } } ctx.putImageData(img,0,0); })();
     var provKabCv=document.createElement('canvas'); provKabCv.width=W; provKabCv.height=H;
     var hiCv=document.createElement('canvas'); hiCv.width=W; hiCv.height=H;
     var pickCv=document.createElement('canvas'); pickCv.width=W; pickCv.height=H;
@@ -143,19 +146,19 @@
     var hover=null, hiKey=null, pickKey=null, drag=null, pointers={}, pinchDist=null, pinchActive=false;
 
     function paintPred(cv2, pred, bb, fill, borderHex){
-      var ctx=cv2.getContext('2d'); ctx.clearRect(0,0,W,H); var img=ctx.getImageData(0,0,W,H), d=img.data, fb=hex(borderHex);
+      var ctx=cv2.getContext('2d'); ctx.clearRect(0,0,W,H); var img=ctx.getImageData(0,0,W,H), d32=new Uint32Array(img.data.buffer);
+      var fb=hex(borderHex), border32=packRgba(fb[0],fb[1],fb[2],255), fill32=packRgba(fill[0],fill[1],fill[2],fill[3]);
       for(var y=bb.y0;y<=bb.y1;y++)for(var x=bb.x0;x<=bb.x1;x++){ var o=y*W+x; if(!pred(o))continue;
-        var edge=(x===0||!pred(o-1))||(x===W-1||!pred(o+1))||(y===0||!pred(o-W))||(y===H-1||!pred(o+W)); var q=o*4;
-        if(edge){ d[q]=fb[0];d[q+1]=fb[1];d[q+2]=fb[2];d[q+3]=255; } else { d[q]=fill[0];d[q+1]=fill[1];d[q+2]=fill[2];d[q+3]=fill[3]; } }
+        var edge=(x===0||!pred(o-1))||(x===W-1||!pred(o+1))||(y===0||!pred(o-W))||(y===H-1||!pred(o+W));
+        d32[o] = edge ? border32 : fill32; }
       ctx.putImageData(img,0,0);
     }
     function buildProvKab(pi){
-      var p=D.prov[pi], ctx=provKabCv.getContext('2d'); ctx.clearRect(0,0,W,H); var img=ctx.getImageData(0,0,W,H), d=img.data;
+      var p=D.prov[pi], ctx=provKabCv.getContext('2d'); ctx.clearRect(0,0,W,H); var img=ctx.getImageData(0,0,W,H), d32=new Uint32Array(img.data.buffer);
       var inProv={}; (D.provKab[pi]||[]).forEach(function(k){ inProv[k]=1; });
       for(var y=p.y0;y<=p.y1;y++)for(var x=p.x0;x<=p.x1;x++){ var o=y*W+x, kv=KG[o]; if(kv===SEA16||!inProv[kv])continue;
-        var fillc=rgb[bProv(D.kab[kv].m)];
-        var edge=(x===0||KG[o-1]!==kv)||(x===W-1||KG[o+1]!==kv)||(y===0||KG[o-W]!==kv)||(y===H-1||KG[o+W]!==kv); var q=o*4;
-        if(edge){ d[q]=7;d[q+1]=11;d[q+2]=20;d[q+3]=255; } else { d[q]=fillc[0];d[q+1]=fillc[1];d[q+2]=fillc[2];d[q+3]=255; } }
+        var edge=(x===0||KG[o-1]!==kv)||(x===W-1||KG[o+1]!==kv)||(y===0||KG[o-W]!==kv)||(y===H-1||KG[o+W]!==kv);
+        d32[o] = edge ? edgeProvKab32 : rgba32[bProv(D.kab[kv].m)]; }
       ctx.putImageData(img,0,0);
     }
     function buildHi(hv){ if(hv.type==='prov'){ var p=D.prov[hv.idx]; paintPred(hiCv,function(o){return PG[o]===hv.idx;},p,[255,255,255,66],'#FFE500'); } else { var k=D.kab[hv.idx]; paintPred(hiCv,function(o){return KG[o]===hv.idx;},k,[255,255,255,80],'#FFE500'); } }
