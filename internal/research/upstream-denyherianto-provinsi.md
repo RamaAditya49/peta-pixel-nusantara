@@ -312,7 +312,16 @@ Three small documentation problems:
 
 ## Keputusan dari riset ini
 
-- Kirim 1 PR (U-01, U-02) dan 3 isu (U-03, U-04, U-05) ke upstream setelah Rama setuju. Belum dikirim per 2026-11-12.
+- Kirim 1 PR (U-01, U-02) dan 3 isu (U-03, U-04, U-05) ke upstream. Rama setuju. Semua terkirim 2026-11-12:
+
+| Draf | Tautan | Status 2026-11-12 |
+|------|--------|-------------------|
+| PR-1 (U-01, U-02) | https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces/pull/1 | OPEN, mergeable |
+| ISSUE-2 (U-03) | https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces/issues/2 | OPEN |
+| ISSUE-3 (U-04) | https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces/issues/3 | OPEN |
+| ISSUE-4 (U-05) | https://github.com/denyherianto/indonesia-geojson-topojson-maps-with-38-provinces/issues/4 | OPEN |
+
+- Fork: `RamaAditya49/indonesia-geojson-topojson-maps-with-38-provinces`, branch `fix/papua-province-codes`, commit `230d613`.
 - Repo kita tetap memakai `sources/indonesia-38-provinces.topo.json` versi sekarang. Kita tidak memakai `KODE_PROV`, jadi PR-1 tidak memengaruhi data kita.
 
 ## Pertanyaan terbuka
@@ -342,3 +351,4 @@ node $R/patch-codes.mjs $U <folder output>
 ## Riwayat
 
 - 2026-11-12: riset dibuat. Audit upstream commit `80aa4a9`. 5 temuan, 1 PR siap, 3 draf isu.
+- 2026-11-12: PR #1 dan isu #2, #3, #4 terkirim ke upstream atas persetujuan Rama.
